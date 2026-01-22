@@ -1,0 +1,214 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  overflow: hidden;
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.control-panel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background-color: rgba(26, 26, 26, 0.95);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 300px;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.control-panel h2 {
+  margin-bottom: 15px;
+  font-size: 18px;
+  color: #4a9eff;
+}
+
+.control-panel .section {
+  margin-bottom: 15px;
+}
+
+.control-panel label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #a0a0a0;
+}
+
+.control-panel select,
+.control-panel input {
+  width: 100%;
+  padding: 8px;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 14px;
+}
+
+.control-panel button {
+  width: 100%;
+  padding: 10px;
+  background-color: #4a9eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.control-panel button:hover {
+  background-color: #3a8eef;
+}
+
+.control-panel button:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+.control-panel .status {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #2a2a2a;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.control-panel .status.active {
+  border-left: 3px solid #4caf50;
+}
+
+.control-panel .status.inactive {
+  border-left: 3px solid #f44336;
+}
+
+#visualization {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#canvas-container {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#canvas-container {
+  width: 100%;
+  height: 100%;
+  background-color: #0d0d0d;
+}
+
+.device-tooltip {
+  position: absolute;
+  background-color: rgba(26, 26, 26, 0.95);
+  border: 1px solid #4a9eff;
+  border-radius: 6px;
+  padding: 12px;
+  pointer-events: none;
+  z-index: 1001;
+  min-width: 200px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.device-tooltip h3 {
+  font-size: 14px;
+  color: #4a9eff;
+  margin-bottom: 8px;
+}
+
+.device-tooltip .info {
+  font-size: 12px;
+  color: #a0a0a0;
+  margin-bottom: 4px;
+}
+
+.device-tooltip .info strong {
+  color: #e0e0e0;
+}
+
+.stats-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(26, 26, 26, 0.95);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 15px;
+  min-width: 200px;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.stats-panel h3 {
+  font-size: 14px;
+  color: #4a9eff;
+  margin-bottom: 10px;
+}
+
+.stats-panel .stat {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.stats-panel .stat .label {
+  color: #a0a0a0;
+}
+
+.stats-panel .stat .value {
+  color: #e0e0e0;
+  font-weight: bold;
+}
+
+.protocol-legend {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(26, 26, 26, 0.95);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 15px;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.protocol-legend h3 {
+  font-size: 14px;
+  color: #4a9eff;
+  margin-bottom: 10px;
+}
+
+.protocol-legend .legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.protocol-legend .color-box {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 8px;
+}
+
+.protocol-legend .label {
+  color: #a0a0a0;
+}

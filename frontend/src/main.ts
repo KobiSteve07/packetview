@@ -1,0 +1,350 @@
+import { WebSocketService } from './services/api';
+import { VisualizationService } from './services/visualization';
+import * as Types from './types';
+import './styles/global.css';
+
+export class PacketViewApp {
+  private wsService: WebSocketService;
+  private vizService: VisualizationService;
+  private interfaces: Types.InterfaceInfo[] = [];
+  private selectedInterface: string = '';
+  private isCapturing: boolean = false;
+
+  private controlPanelElement: HTMLElement;
+  private statsPanelElement: HTMLElement;
+  private deviceTooltipElement: HTMLElement;
+
+  private totalPackets: number = 0;
+  private totalTraffic: number = 0;
+
+  constructor() {
+    this.wsService = new WebSocketService('');
+
+    const canvas = document.createElement('canvas');
+    canvas.id = 'canvas-container';
+    const vizContainer = document.getElementById('visualization');
+    if (vizContainer) {
+      vizContainer.appendChild(canvas);
+    }
+    this.vizService = new VisualizationService(canvas);
+
+    this.controlPanelElement = this.createControlPanel();
+    this.statsPanelElement = this.createStatsPanel();
+    this.deviceTooltipElement = this.createDeviceTooltip();
+
+    document.body.appendChild(this.controlPanelElement);
+    document.body.appendChild(this.statsPanelElement);
+    document.body.appendChild(this.deviceTooltipElement);
+
+    this.setupWebSocketHandlers();
+    this.setupEventListeners();
+    this.loadInterfaces();
+  }
+
+  private createControlPanel(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.className = 'control-panel';
+    panel.innerHTML = `
+      <h2>PacketView</h2>
+      <div class="section">
+        <label for="interface-select">Network Interface</label>
+        <select id="interface-select">
+          <option value="">Loading...</option>
+        </select>
+      </div>
+      <div class="section">
+        <label for="filter-input">BPF Filter (optional)</label>
+        <input type="text" id="filter-input" placeholder="e.g., port 80, host 192.168.1.1" />
+      </div>
+      <button id="start-capture-btn" disabled>Start Capture</button>
+      <button id="stop-capture-btn" disabled>Stop Capture</button>
+      <button id="reset-view-btn">Reset View</button>
+      <div class="status inactive" id="status-panel">
+        Status: <span id="status-text">Idle</span>
+      </div>
+    `;
+    return panel;
+  }
+
+  private createStatsPanel(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.className = 'stats-panel';
+    panel.innerHTML = `
+      <h3>Statistics</h3>
+      <div class="stat">
+        <span class="label">Total Packets:</span>
+        <span class="value" id="total-packets">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Total Traffic:</span>
+        <span class="value" id="total-traffic">0 B</span>
+      </div>
+      <div class="stat">
+        <span class="label">Active Devices:</span>
+        <span class="value" id="active-devices">0</span>
+      </div>
+      <div class="stat">
+        <span class="label">Active Connections:</span>
+        <span class="value" id="active-connections">0</span>
+      </div>
+    `;
+    return panel;
+  }
+
+  private createDeviceTooltip(): HTMLElement {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'device-tooltip';
+    tooltip.style.display = 'none';
+    return tooltip;
+  }
+
+  private setupEventListeners(): void {
+    const interfaceSelect = document.getElementById('interface-select') as HTMLSelectElement;
+    const startBtn = document.getElementById('start-capture-btn') as HTMLButtonElement;
+    const stopBtn = document.getElementById('stop-capture-btn') as HTMLButtonElement;
+    const resetViewBtn = document.getElementById('reset-view-btn') as HTMLButtonElement;
+
+    interfaceSelect.addEventListener('change', (e) => {
+      this.selectedInterface = (e.target as HTMLSelectElement).value;
+      this.updateStartButton();
+    });
+
+    startBtn.addEventListener('click', () => this.startCapture());
+    stopBtn.addEventListener('click', () => this.stopCapture());
+    resetViewBtn.addEventListener('click', () => this.vizService.resetView());
+
+    document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+
+    this.vizService.start();
+  }
+
+  private setupWebSocketHandlers(): void {
+    this.wsService.onMessage(Types.WebSocketMessageType.INTERFACE_LIST, (interfaces: Types.InterfaceInfo[]) => {
+      this.interfaces = interfaces;
+      this.populateInterfaceSelect();
+      console.log(`[Frontend] Received ${interfaces.length} network interfaces`);
+    });
+
+    this.wsService.onMessage(Types.WebSocketMessageType.PACKET, (packet: Types.Packet) => {
+      this.totalPackets++;
+      this.totalTraffic += packet.size;
+      this.updateStats();
+      if (this.totalPackets % 100 === 0) {
+        console.log(`[Frontend] Total packets: ${this.totalPackets}, Total traffic: ${this.formatBytes(this.totalTraffic)}`);
+      }
+    });
+
+    this.wsService.onMessage(Types.WebSocketMessageType.NETWORK_STATE, (state: Types.NetworkState) => {
+      const devices = state.devices || [];
+      const connections = state.connections || [];
+
+      this.vizService.updateNetworkState(devices, connections);
+
+      const activeDevicesEl = document.getElementById('active-devices');
+      const activeConnectionsEl = document.getElementById('active-connections');
+      if (activeDevicesEl) activeDevicesEl.textContent = devices.length.toString();
+      if (activeConnectionsEl) activeConnectionsEl.textContent = connections.length.toString();
+
+      if (devices.length > 0 && this.totalPackets % 100 === 0) {
+        console.log(`[Frontend] Network state: ${devices.length} devices, ${connections.length} connections`);
+      }
+    });
+
+    this.wsService.onMessage(Types.WebSocketMessageType.ERROR, (error: any) => {
+      console.error('[Frontend] Server error:', error);
+      alert(`Error: ${error.error}`);
+    });
+
+    this.wsService.connect();
+  }
+
+  private async loadInterfaces(): Promise<void> {
+    try {
+      const response = await fetch('/api/interfaces');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      this.interfaces = data.interfaces;
+      this.populateInterfaceSelect();
+      console.log('Loaded interfaces:', this.interfaces);
+    } catch (error) {
+      console.error('Failed to load interfaces:', error);
+      this.showErrorMessage('Failed to load network interfaces. Make sure backend is running on port 3001.');
+    }
+  }
+
+  private showErrorMessage(message: string): void {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(255, 68, 68, 0.9);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      z-index: 9999;
+      text-align: center;
+      max-width: 400px;
+    `;
+    errorDiv.textContent = message;
+    document.body.appendChild(errorDiv);
+
+    setTimeout(() => {
+      document.body.removeChild(errorDiv);
+    }, 5000);
+  }
+
+  private populateInterfaceSelect(): void {
+    const select = document.getElementById('interface-select') as HTMLSelectElement;
+    select.innerHTML = '';
+
+    this.interfaces.forEach(iface => {
+      const option = document.createElement('option');
+      option.value = iface.name;
+      option.textContent = `${iface.name} (${iface.ip || 'No IP'}) ${iface.isUp ? '↑' : '↓'}`;
+      option.disabled = !iface.isUp;
+      select.appendChild(option);
+    });
+
+    if (this.interfaces.length > 0 && !this.selectedInterface) {
+      const upInterface = this.interfaces.find(iface => iface.isUp);
+      if (upInterface) {
+        this.selectedInterface = upInterface.name;
+        select.value = this.selectedInterface;
+      }
+    }
+
+    this.updateStartButton();
+  }
+
+  private updateStartButton(): void {
+    const startBtn = document.getElementById('start-capture-btn') as HTMLButtonElement;
+    const stopBtn = document.getElementById('stop-capture-btn') as HTMLButtonElement;
+
+    startBtn.disabled = !this.selectedInterface || this.isCapturing;
+    stopBtn.disabled = !this.isCapturing;
+  }
+
+  private async startCapture(): Promise<void> {
+    if (!this.selectedInterface) {
+      this.showErrorMessage('Please select a network interface first.');
+      return;
+    }
+
+    const filterInput = document.getElementById('filter-input') as HTMLInputElement;
+    const filter = filterInput.value.trim();
+
+    console.log(`[Frontend] Starting capture on interface: ${this.selectedInterface}, filter: ${filter || 'none'}`);
+
+    try {
+      const response = await fetch('/api/capture/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          interface: this.selectedInterface,
+          filter: filter || undefined
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error: ${errorText}`);
+      }
+
+      this.isCapturing = true;
+      this.updateStatus('Capturing', true);
+      this.updateStartButton();
+      console.log('[Frontend] Capture started successfully');
+    } catch (error: any) {
+      console.error('[Frontend] Failed to start capture:', error);
+      this.showErrorMessage(`Failed to start capture: ${error.message || error}`);
+      this.isCapturing = false;
+      this.updateStartButton();
+    }
+  }
+
+  private async stopCapture(): Promise<void> {
+    console.log('[Frontend] Stopping capture...');
+
+    try {
+      const response = await fetch('/api/capture/stop', {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error: ${errorText}`);
+      }
+
+      this.isCapturing = false;
+      this.updateStatus('Idle', false);
+      this.updateStartButton();
+      console.log(`[Frontend] Capture stopped successfully. Total stats: ${this.totalPackets} packets, ${this.formatBytes(this.totalTraffic)} traffic`);
+    } catch (error: any) {
+      console.error('[Frontend] Failed to stop capture:', error);
+      this.showErrorMessage(`Failed to stop capture: ${error.message || error}`);
+    }
+  }
+
+  private updateStatus(text: string, active: boolean): void {
+    const statusPanel = document.getElementById('status-panel') as HTMLElement;
+    const statusText = document.getElementById('status-text') as HTMLElement;
+
+    statusPanel.className = `status ${active ? 'active' : 'inactive'}`;
+    statusText.textContent = text;
+  }
+
+  private updateStats(): void {
+    const totalPacketsEl = document.getElementById('total-packets');
+    const totalTrafficEl = document.getElementById('total-traffic');
+
+    if (totalPacketsEl) totalPacketsEl.textContent = this.totalPackets.toString();
+    if (totalTrafficEl) totalTrafficEl.textContent = this.formatBytes(this.totalTraffic);
+  }
+
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+  }
+
+  private handleMouseMove(event: MouseEvent): void {
+    const canvas = document.getElementById('canvas-container') as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    const device = this.vizService.getDeviceAtPosition(x, y);
+
+    if (device) {
+      const totalBytes = device.trafficIn + device.trafficOut;
+      if (this.totalPackets % 100 === 0) {
+        console.log(`[Frontend] Hovering over device ${device.ip}: Type=${device.type}, In=${this.formatBytes(device.trafficIn)}, Out=${this.formatBytes(device.trafficOut)}, Total=${this.formatBytes(totalBytes)}`);
+      }
+      this.deviceTooltipElement.style.display = 'block';
+      this.deviceTooltipElement.style.left = `${event.clientX + 15}px`;
+      this.deviceTooltipElement.style.top = `${event.clientY + 15}px`;
+      this.deviceTooltipElement.innerHTML = `
+        <h3>${device.ip}</h3>
+        <div class="info"><strong>Type:</strong> ${device.type}</div>
+        <div class="info"><strong>Traffic In:</strong> ${this.formatBytes(device.trafficIn)}</div>
+        <div class="info"><strong>Traffic Out:</strong> ${this.formatBytes(device.trafficOut)}</div>
+        <div class="info"><strong>Total Traffic:</strong> ${this.formatBytes(totalBytes)}</div>
+        ${device.hostname ? `<div class="info"><strong>Hostname:</strong> ${device.hostname}</div>` : ''}
+      `;
+    } else {
+      this.deviceTooltipElement.style.display = 'none';
+    }
+  }
+}
+
+new PacketViewApp();
