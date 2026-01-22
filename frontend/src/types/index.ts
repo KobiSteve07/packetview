@@ -82,6 +82,18 @@ export enum WebSocketMessageType {
   ERROR = 'ERROR'
 }
 
+export interface FilterOptions {
+  ip: string;
+  ipType: 'all' | 'local' | 'public';
+  protocol: 'all' | Protocol;
+}
+
+export enum IpType {
+  ALL = 'all',
+  LOCAL = 'local',
+  PUBLIC = 'public'
+}
+
 export interface WebSocketMessage {
   type: WebSocketMessageType;
   data: any;

@@ -41,6 +41,30 @@ body {
   margin-bottom: 15px;
 }
 
+.control-panel .section.filter-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: rgba(42, 42, 42, 0.5);
+  border-radius: 6px;
+  border: 1px solid #333;
+}
+
+.control-panel .section.filter-section h3 {
+  font-size: 14px;
+  color: #e0e0e0;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #444;
+}
+
+.control-panel .filter-row {
+  margin-bottom: 12px;
+}
+
+.control-panel .filter-row:last-child {
+  margin-bottom: 0;
+}
+
 .control-panel label {
   display: block;
   margin-bottom: 5px;

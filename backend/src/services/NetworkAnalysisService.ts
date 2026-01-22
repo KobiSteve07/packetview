@@ -4,6 +4,7 @@ export class NetworkAnalysisService {
   private devices: Map<string, NetworkDevice>;
   private connections: Map<string, NetworkConnection>;
   private logEnabled: boolean;
+  private collisionCheckCounter: number = 0;
 
   constructor(logEnabled: boolean = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
     this.devices = new Map();
@@ -69,13 +70,15 @@ export class NetworkAnalysisService {
         ip,
         mac,
         type: this.detectDeviceType(ip),
-        x: Math.random() * 800,
-        y: Math.random() * 600,
+        x: Math.random() * 2000,
+        y: Math.random() * 1500,
         trafficIn: 0,
         trafficOut: 0,
         lastSeen: 0
       };
       this.devices.set(ip, device);
+      this.resolveCollisions(device);
+
       if (this.logEnabled) {
         console.log(`[NetworkAnalysisService] NEW DEVICE discovered: ${ip}, MAC: ${mac || 'N/A'}, type: ${device.type}, position: (${device.x.toFixed(0)}, ${device.y.toFixed(0)})`);
       }
@@ -92,6 +95,90 @@ export class NetworkAnalysisService {
         if (trafficTotal > 0) {
           console.log(`[NetworkAnalysisService] Device ${ip} stats - Type: ${device.type}, In: ${device.trafficIn}B, Out: ${device.trafficOut}B, Total: ${trafficTotal}B, Last seen: ${new Date(device.lastSeen).toISOString()}`);
         }
+      }
+    }
+  }
+
+  private resolveCollisions(newDevice: NetworkDevice): void {
+    const newDeviceRadius = this.getDeviceRadius(newDevice);
+    const separationAttempts = 100;
+    let attempts = 0;
+
+    while (attempts < separationAttempts) {
+      let hasCollision = false;
+
+      for (const [ip, device] of this.devices) {
+        if (ip === newDevice.id) continue;
+
+        const deviceRadius = this.getDeviceRadius(device);
+        const minDistance = newDeviceRadius + deviceRadius + 50;
+        const dx = device.x - newDevice.x;
+        const dy = device.y - newDevice.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < minDistance) {
+          hasCollision = true;
+          const angle = Math.atan2(dy, dx);
+          const separationForce = (minDistance - distance) / 2;
+
+          newDevice.x -= Math.cos(angle) * separationForce;
+          newDevice.y -= Math.sin(angle) * separationForce;
+
+          device.x += Math.cos(angle) * separationForce;
+          device.y += Math.sin(angle) * separationForce;
+        }
+      }
+
+      if (!hasCollision) break;
+      attempts++;
+    }
+
+    newDevice.x = Math.max(50, Math.min(1950, newDevice.x));
+    newDevice.y = Math.max(50, Math.min(1450, newDevice.y));
+  }
+
+  private getDeviceRadius(device: NetworkDevice): number {
+    const baseRadius = 25;
+    const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
+    return baseRadius + trafficBonus;
+  }
+
+  private resolveAllCollisions(): void {
+    const separationAttempts = 50;
+
+    for (let attempt = 0; attempt < separationAttempts; attempt++) {
+      let hasCollision = false;
+
+      for (const [ip1, device1] of this.devices) {
+        for (const [ip2, device2] of this.devices) {
+          if (ip1 >= ip2) continue;
+
+          const radius1 = this.getDeviceRadius(device1);
+          const radius2 = this.getDeviceRadius(device2);
+          const minDistance = radius1 + radius2 + 50;
+          const dx = device2.x - device1.x;
+          const dy = device2.y - device1.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < minDistance) {
+            hasCollision = true;
+            const angle = Math.atan2(dy, dx);
+            const separationForce = (minDistance - distance) / 2;
+
+            device1.x -= Math.cos(angle) * separationForce;
+            device1.y -= Math.sin(angle) * separationForce;
+
+            device2.x += Math.cos(angle) * separationForce;
+            device2.y += Math.sin(angle) * separationForce;
+          }
+        }
+      }
+
+      if (!hasCollision) break;
+
+      for (const device of this.devices.values()) {
+        device.x = Math.max(50, Math.min(1950, device.x));
+        device.y = Math.max(50, Math.min(1450, device.y));
       }
     }
   }
@@ -178,6 +265,12 @@ export class NetworkAnalysisService {
     const DEVICE_TIMEOUT = 300000;
     const CONNECTION_TIMEOUT = 300000;
     const now = Date.now();
+
+    this.collisionCheckCounter++;
+    if (this.collisionCheckCounter >= 10) {
+      this.resolveAllCollisions();
+      this.collisionCheckCounter = 0;
+    }
 
     const allDevices = Array.from(this.devices.values());
     const allConnections = Array.from(this.connections.values());

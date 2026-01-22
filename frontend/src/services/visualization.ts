@@ -26,6 +26,13 @@ export class VisualizationService {
   private devices: Map<string, Types.NetworkDevice>;
   private connections: Map<string, Types.NetworkConnection>;
   private packetAnimations: PacketAnimation[];
+  private localIp: string | null = null;
+  private showPacketAnimations: boolean = true;
+  private filters: Types.FilterOptions = {
+    ip: '',
+    ipType: 'all',
+    protocol: 'all'
+  };
 
   // Pan state
   private panOffsetX: number = 0;
@@ -160,6 +167,9 @@ export class VisualizationService {
   }
 
   addPacketAnimation(connectionId: string, protocol: Types.Protocol): void {
+    if (this.packetAnimations.length > 50) {
+      return;
+    }
     this.packetAnimations.push({
       connectionId,
       progress: 0,
@@ -213,33 +223,11 @@ export class VisualizationService {
     }
   }
 
-  private drawConnections(): void {
-    this.connections.forEach(connection => {
-      const sourceDevice = this.devices.get(connection.sourceId);
-      const destDevice = this.devices.get(connection.destId);
-
-      if (sourceDevice && destDevice) {
-        this.ctx.beginPath();
-        this.ctx.moveTo(sourceDevice.x, sourceDevice.y);
-        this.ctx.lineTo(destDevice.x, destDevice.y);
-
-        const color = PROTOCOL_COLORS[connection.protocol] || PROTOCOL_COLORS.OTHER;
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = Math.min(connection.traffic / 1000 + 1, 5);
-        this.ctx.stroke();
-
-        this.ctx.fillStyle = color;
-        this.ctx.font = '10px Arial';
-        this.ctx.fillText(
-          `${connection.protocol} (${connection.packets} / ${this.formatBytes(connection.traffic)})`,
-          (sourceDevice.x + destDevice.x) / 2,
-          (sourceDevice.y + destDevice.y) / 2 - 5
-        );
-      }
-    });
-  }
-
   private drawPackets(): void {
+    if (!this.showPacketAnimations) {
+      return;
+    }
+
     const ANIMATION_SPEED = 0.02;
 
     this.packetAnimations = this.packetAnimations.filter(anim => {
@@ -279,14 +267,107 @@ export class VisualizationService {
 
   private drawDevices(): void {
     this.devices.forEach(device => {
-      this.drawDevice(device);
+      if (this.passesDeviceFilter(device)) {
+        this.drawDevice(device);
+      }
     });
+  }
+
+  private drawConnections(): void {
+    this.connections.forEach(connection => {
+      const sourceDevice = this.devices.get(connection.sourceId);
+      const destDevice = this.devices.get(connection.destId);
+
+      if (sourceDevice && destDevice && this.passesDeviceFilter(sourceDevice) && this.passesDeviceFilter(destDevice)) {
+        if (this.filters.protocol !== 'all' && connection.protocol !== this.filters.protocol) {
+          return;
+        }
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(sourceDevice.x, sourceDevice.y);
+        this.ctx.lineTo(destDevice.x, destDevice.y);
+
+        const color = PROTOCOL_COLORS[connection.protocol] || PROTOCOL_COLORS.OTHER;
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = Math.min(connection.traffic / 1000 + 1, 5);
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = color;
+        this.ctx.font = '10px Arial';
+        this.ctx.fillText(
+          `${connection.protocol} (${connection.packets} / ${this.formatBytes(connection.traffic)})`,
+          (sourceDevice.x + destDevice.x) / 2,
+          (sourceDevice.y + destDevice.y) / 2 - 5
+        );
+      }
+    });
+  }
+
+  private passesDeviceFilter(device: Types.NetworkDevice): boolean {
+    const { ip, ipType } = this.filters;
+
+    if (ipType === 'local' && !this.isLocalIP(device.ip)) {
+      return false;
+    }
+
+    if (ipType === 'public' && this.isLocalIP(device.ip)) {
+      return false;
+    }
+
+    if (ip && !device.ip.includes(ip)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  setFilters(filters: Partial<Types.FilterOptions>): void {
+    this.filters = { ...this.filters, ...filters };
+  }
+
+  getFilters(): Types.FilterOptions {
+    return { ...this.filters };
+  }
+
+  private isLocalIP(ip: string): boolean {
+    if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('127.') || ip.startsWith('169.254.')) {
+      return true;
+    }
+
+    if (ip.startsWith('172.')) {
+      const parts = ip.split('.');
+      if (parts.length >= 2) {
+        const secondOctet = parseInt(parts[1]);
+        return secondOctet >= 16 && secondOctet <= 31;
+      }
+    }
+
+    return false;
   }
 
   private drawDevice(device: Types.NetworkDevice): void {
     const baseRadius = 25;
     const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
     const radius = baseRadius + trafficBonus;
+    const isMyDevice = this.isMyDevice(device);
+
+    if (isMyDevice) {
+      const pulseIntensity = (Math.sin(Date.now() / 500) + 1) / 2;
+      const glowRadius = radius + 10 + pulseIntensity * 15;
+
+      const glowGradient = this.ctx.createRadialGradient(
+        device.x, device.y, radius,
+        device.x, device.y, glowRadius
+      );
+      glowGradient.addColorStop(0, `rgba(100, 255, 150, ${0.4 + pulseIntensity * 0.3})`);
+      glowGradient.addColorStop(0.5, `rgba(100, 255, 150, ${0.2 + pulseIntensity * 0.15})`);
+      glowGradient.addColorStop(1, 'rgba(100, 255, 150, 0)');
+
+      this.ctx.beginPath();
+      this.ctx.arc(device.x, device.y, glowRadius, 0, Math.PI * 2);
+      this.ctx.fillStyle = glowGradient;
+      this.ctx.fill();
+    }
 
     this.ctx.beginPath();
     this.ctx.arc(device.x, device.y, radius, 0, Math.PI * 2);
@@ -295,14 +376,21 @@ export class VisualizationService {
       device.x, device.y, 0,
       device.x, device.y, radius
     );
-    gradient.addColorStop(0, '#4a9eff');
-    gradient.addColorStop(1, '#2a2a8a');
+
+    const isLocal = this.isLocalIP(device.ip);
+    if (isMyDevice) {
+      gradient.addColorStop(0, '#64ff96');
+      gradient.addColorStop(1, '#2a8a4a');
+    } else if (isLocal) {
+      gradient.addColorStop(0, '#4a9eff');
+      gradient.addColorStop(1, '#2a2a8a');
+    } else {
+      gradient.addColorStop(0, '#ff9e4a');
+      gradient.addColorStop(1, '#8a2a2a');
+    }
+
     this.ctx.fillStyle = gradient;
     this.ctx.fill();
-
-    this.ctx.strokeStyle = '#4a9eff';
-    this.ctx.lineWidth = 2;
-    this.ctx.stroke();
 
     this.ctx.fillStyle = '#ffffff';
     this.ctx.font = 'bold 11px Arial';
@@ -352,5 +440,18 @@ export class VisualizationService {
 
   start(): void {
     this.render();
+  }
+
+  setLocalIp(ip: string): void {
+    this.localIp = ip;
+  }
+
+  togglePacketAnimations(): boolean {
+    this.showPacketAnimations = !this.showPacketAnimations;
+    return this.showPacketAnimations;
+  }
+
+  private isMyDevice(device: Types.NetworkDevice): boolean {
+    return this.localIp !== null && device.ip === this.localIp;
   }
 }

@@ -52,13 +52,41 @@ export class PacketViewApp {
           <option value="">Loading...</option>
         </select>
       </div>
-      <div class="section">
-        <label for="filter-input">BPF Filter (optional)</label>
-        <input type="text" id="filter-input" placeholder="e.g., port 80, host 192.168.1.1" />
+      <div class="section filter-section">
+        <h3>Live Filters</h3>
+        <div class="filter-row">
+          <label for="ip-filter">IP Address:</label>
+          <input type="text" id="ip-filter" placeholder="e.g., 192.168" />
+        </div>
+        <div class="filter-row">
+          <label for="ip-type-filter">IP Type:</label>
+          <select id="ip-type-filter">
+            <option value="all">All IPs</option>
+            <option value="local">Local Only</option>
+            <option value="public">Public Only</option>
+          </select>
+        </div>
+        <div class="filter-row">
+          <label for="protocol-filter">Protocol:</label>
+          <select id="protocol-filter">
+            <option value="all">All Protocols</option>
+            <option value="TCP">TCP</option>
+            <option value="UDP">UDP</option>
+            <option value="ICMP">ICMP</option>
+            <option value="HTTP">HTTP</option>
+            <option value="HTTPS">HTTPS</option>
+            <option value="DNS">DNS</option>
+            <option value="SSH">SSH</option>
+            <option value="FTP">FTP</option>
+            <option value="SMTP">SMTP</option>
+            <option value="OTHER">OTHER</option>
+          </select>
+        </div>
       </div>
       <button id="start-capture-btn" disabled>Start Capture</button>
       <button id="stop-capture-btn" disabled>Stop Capture</button>
       <button id="reset-view-btn">Reset View</button>
+      <button id="toggle-animations-btn">Disable Animations</button>
       <div class="status inactive" id="status-panel">
         Status: <span id="status-text">Idle</span>
       </div>
@@ -103,15 +131,39 @@ export class PacketViewApp {
     const startBtn = document.getElementById('start-capture-btn') as HTMLButtonElement;
     const stopBtn = document.getElementById('stop-capture-btn') as HTMLButtonElement;
     const resetViewBtn = document.getElementById('reset-view-btn') as HTMLButtonElement;
+    const ipFilterInput = document.getElementById('ip-filter') as HTMLInputElement;
+    const ipTypeFilterSelect = document.getElementById('ip-type-filter') as HTMLSelectElement;
+    const protocolFilterSelect = document.getElementById('protocol-filter') as HTMLSelectElement;
 
     interfaceSelect.addEventListener('change', (e) => {
       this.selectedInterface = (e.target as HTMLSelectElement).value;
+      const selectedIface = this.interfaces.find(iface => iface.name === this.selectedInterface);
+      if (selectedIface?.ip) {
+        this.vizService.setLocalIp(selectedIface.ip);
+      }
       this.updateStartButton();
     });
+
+    const updateFilters = () => {
+      this.vizService.setFilters({
+        ip: ipFilterInput.value.trim(),
+        ipType: ipTypeFilterSelect.value as 'all' | 'local' | 'public',
+        protocol: protocolFilterSelect.value === 'all' ? 'all' : protocolFilterSelect.value as Types.Protocol
+      });
+    };
+
+    ipFilterInput.addEventListener('input', updateFilters);
+    ipTypeFilterSelect.addEventListener('change', updateFilters);
+    protocolFilterSelect.addEventListener('change', updateFilters);
 
     startBtn.addEventListener('click', () => this.startCapture());
     stopBtn.addEventListener('click', () => this.stopCapture());
     resetViewBtn.addEventListener('click', () => this.vizService.resetView());
+    document.getElementById('toggle-animations-btn')?.addEventListener('click', () => {
+      const isEnabled = this.vizService.togglePacketAnimations();
+      const btn = document.getElementById('toggle-animations-btn') as HTMLButtonElement;
+      btn.textContent = isEnabled ? 'Disable Animations' : 'Enable Animations';
+    });
 
     document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
 
@@ -129,6 +181,12 @@ export class PacketViewApp {
       this.totalPackets++;
       this.totalTraffic += packet.size;
       this.updateStats();
+
+      if (this.isCapturing) {
+        const connectionId = `${packet.sourceIp}:${packet.sourcePort}-${packet.destIp}:${packet.destPort}-${packet.protocol}`;
+        this.vizService.addPacketAnimation(connectionId, packet.protocol);
+      }
+
       if (this.totalPackets % 100 === 0) {
         console.log(`[Frontend] Total packets: ${this.totalPackets}, Total traffic: ${this.formatBytes(this.totalTraffic)}`);
       }
@@ -214,6 +272,9 @@ export class PacketViewApp {
       if (upInterface) {
         this.selectedInterface = upInterface.name;
         select.value = this.selectedInterface;
+        if (upInterface.ip) {
+          this.vizService.setLocalIp(upInterface.ip);
+        }
       }
     }
 
@@ -234,10 +295,7 @@ export class PacketViewApp {
       return;
     }
 
-    const filterInput = document.getElementById('filter-input') as HTMLInputElement;
-    const filter = filterInput.value.trim();
-
-    console.log(`[Frontend] Starting capture on interface: ${this.selectedInterface}, filter: ${filter || 'none'}`);
+    console.log(`[Frontend] Starting capture on interface: ${this.selectedInterface}`);
 
     try {
       const response = await fetch('/api/capture/start', {
@@ -246,8 +304,7 @@ export class PacketViewApp {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          interface: this.selectedInterface,
-          filter: filter || undefined
+          interface: this.selectedInterface
         })
       });
 
