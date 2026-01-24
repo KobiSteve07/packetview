@@ -44,6 +44,12 @@ export class VisualizationService {
   private dragStartOffsetX: number = 0;
   private dragStartOffsetY: number = 0;
 
+  // Device dragging state
+  private isDraggingDevice: boolean = false;
+  private draggedDevice: Types.NetworkDevice | null = null;
+  private deviceDragOffsetX: number = 0;
+  private deviceDragOffsetY: number = 0;
+
   // Zoom state
   private zoomScale: number = 1;
   private minZoom: number = 0.1;
@@ -74,20 +80,43 @@ export class VisualizationService {
   }
 
   private setupPanZoomHandlers(): void {
-    // Pan handlers (mouse drag)
     this.canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) { // Left mouse button
-        this.isDragging = true;
-        this.dragStartX = e.clientX;
-        this.dragStartY = e.clientY;
-        this.dragStartOffsetX = this.panOffsetX;
-        this.dragStartOffsetY = this.panOffsetY;
-        this.canvas.style.cursor = 'grabbing';
+      if (e.button === 0) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const clickedDevice = this.getDeviceAtPosition(x, y);
+        if (clickedDevice) {
+          this.isDraggingDevice = true;
+          this.draggedDevice = clickedDevice;
+          const worldCoords = this.screenToWorld(x, y);
+          this.deviceDragOffsetX = worldCoords.x - clickedDevice.x;
+          this.deviceDragOffsetY = worldCoords.y - clickedDevice.y;
+          this.canvas.style.cursor = 'move';
+        } else {
+          this.isDragging = true;
+          this.dragStartX = e.clientX;
+          this.dragStartY = e.clientY;
+          this.dragStartOffsetX = this.panOffsetX;
+          this.dragStartOffsetY = this.panOffsetY;
+          this.canvas.style.cursor = 'grabbing';
+        }
       }
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (this.isDragging) {
+      if (this.isDraggingDevice && this.draggedDevice) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const worldCoords = this.screenToWorld(x, y);
+        
+        this.draggedDevice.x = worldCoords.x - this.deviceDragOffsetX;
+        this.draggedDevice.y = worldCoords.y - this.deviceDragOffsetY;
+        
+        this.notifyDevicePositionChanged(this.draggedDevice);
+      } else if (this.isDragging) {
         const dx = e.clientX - this.dragStartX;
         const dy = e.clientY - this.dragStartY;
         this.panOffsetX = this.dragStartOffsetX + dx;
@@ -96,7 +125,17 @@ export class VisualizationService {
     });
 
     window.addEventListener('mouseup', () => {
-      if (this.isDragging) {
+      if (this.isDraggingDevice) {
+        // Clear drag state but don't clear draggedDevice reference immediately
+        // This allows updateNetworkState to complete properly
+        this.isDraggingDevice = false;
+        this.canvas.style.cursor = 'grab';
+        
+        // Small delay before clearing draggedDevice to handle any pending updates
+        setTimeout(() => {
+          this.draggedDevice = null;
+        }, 50);
+      } else if (this.isDragging) {
         this.isDragging = false;
         this.canvas.style.cursor = 'grab';
       }
@@ -156,10 +195,45 @@ export class VisualizationService {
   }
 
   updateNetworkState(devices: Types.NetworkDevice[], connections: Types.NetworkConnection[]): void {
-    this.devices.clear();
+    const newDevices = new Map<string, Types.NetworkDevice>();
+    
     devices.forEach(device => {
-      this.devices.set(device.id, device);
+      const existingDevice = this.devices.get(device.id);
+      if (existingDevice) {
+        // During active dragging, preserve dragged device position
+        if (this.isDraggingDevice && this.draggedDevice && this.draggedDevice.id === device.id) {
+          const updatedDevice = {
+            ...device,
+            x: this.draggedDevice.x,
+            y: this.draggedDevice.y
+          };
+          newDevices.set(device.id, updatedDevice);
+          this.draggedDevice = updatedDevice;
+        } else {
+          // Preserve existing position for known devices
+          newDevices.set(device.id, {
+            ...device,
+            x: existingDevice.x,
+            y: existingDevice.y
+          });
+        }
+      } else {
+        // Position new devices
+        this.positionNewDevice(device);
+        newDevices.set(device.id, device);
+      }
     });
+
+    // Resolve collisions for all devices (except the one being dragged)
+    const devicesToResolve = Array.from(newDevices.values()).filter(
+      device => !(this.isDraggingDevice && this.draggedDevice && this.draggedDevice.id === device.id)
+    );
+    
+    if (devicesToResolve.length > 0) {
+      this.resolveAllCollisions(devicesToResolve);
+    }
+
+    this.devices = newDevices;
 
     this.connections.clear();
     connections.forEach(connection => {
@@ -390,6 +464,7 @@ export class VisualizationService {
     const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
     const radius = baseRadius + trafficBonus;
     const isMyDevice = this.isMyDevice(device);
+    const isBeingDragged = this.isDraggingDevice && this.draggedDevice === device;
 
     if (isMyDevice) {
       const pulseIntensity = (Math.sin(Date.now() / 500) + 1) / 2;
@@ -432,8 +507,24 @@ export class VisualizationService {
     this.ctx.fillStyle = gradient;
     this.ctx.fill();
 
+    if (!isBeingDragged) {
+      this.ctx.strokeStyle = isMyDevice ? 'rgba(100, 255, 150, 0.5)' : 'rgba(255, 255, 255, 0.3)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.arc(device.x, device.y, radius + 3, 0, Math.PI * 2);
+      this.ctx.stroke();
+    }
+
+    if (isBeingDragged) {
+      this.ctx.strokeStyle = 'rgba(255, 255, 100, 0.8)';
+      this.ctx.lineWidth = 3;
+      this.ctx.beginPath();
+      this.ctx.arc(device.x, device.y, radius + 5, 0, Math.PI * 2);
+      this.ctx.stroke();
+    }
+
     this.ctx.fillStyle = '#ffffff';
-    this.ctx.font = 'bold 11px Arial';
+    this.ctx.font = isBeingDragged ? 'bold 12px Arial' : 'bold 11px Arial';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText(device.ip, device.x, device.y);
@@ -471,11 +562,20 @@ export class VisualizationService {
       const baseRadius = 25;
       const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
       const radius = baseRadius + trafficBonus;
-      if (distance < radius) {
+      if (distance <= radius) {
         return device;
       }
     }
     return null;
+  }
+
+  updateCursor(x: number, y: number): void {
+    const device = this.getDeviceAtPosition(x, y);
+    if (device) {
+      this.canvas.style.cursor = 'move';
+    } else if (!this.isDraggingDevice && !this.isDragging) {
+      this.canvas.style.cursor = 'grab';
+    }
   }
 
   start(): void {
@@ -493,5 +593,73 @@ export class VisualizationService {
 
   private isMyDevice(device: Types.NetworkDevice): boolean {
     return this.localIp !== null && device.ip === this.localIp;
+  }
+
+  private notifyDevicePositionChanged(device: Types.NetworkDevice): void {
+    // In a real implementation, this would send the updated position to the backend
+    // For now, we'll just log it. The position is already updated in the local device object.
+    if (this.localIp && device.ip !== this.localIp) {
+      // Only send position updates for other devices, not our own
+      console.log(`Device ${device.ip} moved to (${device.x.toFixed(0)}, ${device.y.toFixed(0)})`);
+    }
+  }
+
+  setDevicePosition(deviceId: string, x: number, y: number): void {
+    const device = this.devices.get(deviceId);
+    if (device) {
+      device.x = x;
+      device.y = y;
+    }
+  }
+
+  private positionNewDevice(device: Types.NetworkDevice): void {
+    device.x = Math.random() * 2000;
+    device.y = Math.random() * 1500;
+  }
+
+  private resolveAllCollisions(devices: Types.NetworkDevice[]): void {
+    const separationAttempts = 50;
+
+    for (let attempt = 0; attempt < separationAttempts; attempt++) {
+      let hasCollision = false;
+
+      for (const [ip1, device1] of devices.entries()) {
+        for (const [ip2, device2] of devices.entries()) {
+          if (ip1 >= ip2) continue;
+
+          const radius1 = this.getDeviceRadius(device1);
+          const radius2 = this.getDeviceRadius(device2);
+          const minDistance = radius1 + radius2 + 50;
+          const dx = device2.x - device1.x;
+          const dy = device2.y - device1.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < minDistance) {
+            hasCollision = true;
+            const angle = Math.atan2(dy, dx);
+            const separationForce = (minDistance - distance) / 2;
+
+            device1.x -= Math.cos(angle) * separationForce;
+            device1.y -= Math.sin(angle) * separationForce;
+
+            device2.x += Math.cos(angle) * separationForce;
+            device2.y += Math.sin(angle) * separationForce;
+          }
+        }
+      }
+
+      if (!hasCollision) break;
+
+      devices.forEach(device => {
+        device.x = Math.max(50, Math.min(1950, device.x));
+        device.y = Math.max(50, Math.min(1450, device.y));
+      });
+    }
+  }
+
+  private getDeviceRadius(device: Types.NetworkDevice): number {
+    const baseRadius = 25;
+    const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
+    return baseRadius + trafficBonus;
   }
 }

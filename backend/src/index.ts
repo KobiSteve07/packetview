@@ -163,7 +163,7 @@ wss.on('connection', (ws: WebSocket) => {
     ws.send(JSON.stringify(message));
   });
 
-  const STATE_UPDATE_INTERVAL = 1000;
+  const STATE_UPDATE_INTERVAL = 500;
   let updateCount = 0;
 
   const stateInterval = setInterval(() => {

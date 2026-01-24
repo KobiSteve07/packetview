@@ -4,7 +4,7 @@ export class NetworkAnalysisService {
   private devices: Map<string, NetworkDevice>;
   private connections: Map<string, NetworkConnection>;
   private logEnabled: boolean;
-  private collisionCheckCounter: number = 0;
+
 
   constructor(logEnabled: boolean = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
     this.devices = new Map();
@@ -70,17 +70,16 @@ export class NetworkAnalysisService {
         ip,
         mac,
         type: this.detectDeviceType(ip),
-        x: Math.random() * 2000,
-        y: Math.random() * 1500,
+        x: 0, // Positioning handled by frontend
+        y: 0, // Positioning handled by frontend
         trafficIn: 0,
         trafficOut: 0,
         lastSeen: 0
       };
       this.devices.set(ip, device);
-      this.resolveCollisions(device);
 
       if (this.logEnabled) {
-        console.log(`[NetworkAnalysisService] NEW DEVICE discovered: ${ip}, MAC: ${mac || 'N/A'}, type: ${device.type}, position: (${device.x.toFixed(0)}, ${device.y.toFixed(0)})`);
+        console.log(`[NetworkAnalysisService] NEW DEVICE discovered: ${ip}, MAC: ${mac || 'N/A'}, type: ${device.type}`);
       }
     } else {
       const device = this.devices.get(ip);
@@ -99,89 +98,7 @@ export class NetworkAnalysisService {
     }
   }
 
-  private resolveCollisions(newDevice: NetworkDevice): void {
-    const newDeviceRadius = this.getDeviceRadius(newDevice);
-    const separationAttempts = 100;
-    let attempts = 0;
 
-    while (attempts < separationAttempts) {
-      let hasCollision = false;
-
-      for (const [ip, device] of this.devices) {
-        if (ip === newDevice.id) continue;
-
-        const deviceRadius = this.getDeviceRadius(device);
-        const minDistance = newDeviceRadius + deviceRadius + 50;
-        const dx = device.x - newDevice.x;
-        const dy = device.y - newDevice.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < minDistance) {
-          hasCollision = true;
-          const angle = Math.atan2(dy, dx);
-          const separationForce = (minDistance - distance) / 2;
-
-          newDevice.x -= Math.cos(angle) * separationForce;
-          newDevice.y -= Math.sin(angle) * separationForce;
-
-          device.x += Math.cos(angle) * separationForce;
-          device.y += Math.sin(angle) * separationForce;
-        }
-      }
-
-      if (!hasCollision) break;
-      attempts++;
-    }
-
-    newDevice.x = Math.max(50, Math.min(1950, newDevice.x));
-    newDevice.y = Math.max(50, Math.min(1450, newDevice.y));
-  }
-
-  private getDeviceRadius(device: NetworkDevice): number {
-    const baseRadius = 25;
-    const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
-    return baseRadius + trafficBonus;
-  }
-
-  private resolveAllCollisions(): void {
-    const separationAttempts = 50;
-
-    for (let attempt = 0; attempt < separationAttempts; attempt++) {
-      let hasCollision = false;
-
-      for (const [ip1, device1] of this.devices) {
-        for (const [ip2, device2] of this.devices) {
-          if (ip1 >= ip2) continue;
-
-          const radius1 = this.getDeviceRadius(device1);
-          const radius2 = this.getDeviceRadius(device2);
-          const minDistance = radius1 + radius2 + 50;
-          const dx = device2.x - device1.x;
-          const dy = device2.y - device1.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < minDistance) {
-            hasCollision = true;
-            const angle = Math.atan2(dy, dx);
-            const separationForce = (minDistance - distance) / 2;
-
-            device1.x -= Math.cos(angle) * separationForce;
-            device1.y -= Math.sin(angle) * separationForce;
-
-            device2.x += Math.cos(angle) * separationForce;
-            device2.y += Math.sin(angle) * separationForce;
-          }
-        }
-      }
-
-      if (!hasCollision) break;
-
-      for (const device of this.devices.values()) {
-        device.x = Math.max(50, Math.min(1950, device.x));
-        device.y = Math.max(50, Math.min(1450, device.y));
-      }
-    }
-  }
 
   private detectDeviceType(ip: string): DeviceType {
     if (ip.startsWith('127.') || ip === '0.0.0.0') {
@@ -266,12 +183,6 @@ export class NetworkAnalysisService {
     const CONNECTION_TIMEOUT = 300000;
     const now = Date.now();
 
-    this.collisionCheckCounter++;
-    if (this.collisionCheckCounter >= 10) {
-      this.resolveAllCollisions();
-      this.collisionCheckCounter = 0;
-    }
-
     const allDevices = Array.from(this.devices.values());
     const allConnections = Array.from(this.connections.values());
 
@@ -292,7 +203,6 @@ export class NetworkAnalysisService {
           console.log(`[NetworkAnalysisService]   Device: ${device.ip}`);
           console.log(`[NetworkAnalysisService]     Type: ${device.type}`);
           console.log(`[NetworkAnalysisService]     MAC: ${device.mac || 'N/A'}`);
-          console.log(`[NetworkAnalysisService]     Position: (${device.x.toFixed(0)}, ${device.y.toFixed(0)})`);
           console.log(`[NetworkAnalysisService]     Traffic In: ${device.trafficIn} bytes`);
           console.log(`[NetworkAnalysisService]     Traffic Out: ${device.trafficOut} bytes`);
           console.log(`[NetworkAnalysisService]     Total Traffic: ${device.trafficIn + device.trafficOut} bytes`);
@@ -302,15 +212,15 @@ export class NetworkAnalysisService {
 
       if (activeConnections.length > 0) {
         console.log(`[NetworkAnalysisService] ========== ACTIVE CONNECTIONS ==========`);
-        activeConnections.forEach(connection => {
-          console.log(`[NetworkAnalysisService]   Connection: ${connection.id}`);
-          console.log(`[NetworkAnalysisService]     Source: ${connection.sourceId}`);
-          console.log(`[NetworkAnalysisService]     Dest: ${connection.destId}`);
-          console.log(`[NetworkAnalysisService]     Protocol: ${connection.protocol}`);
-          console.log(`[NetworkAnalysisService]     Packets: ${connection.packets}`);
-          console.log(`[NetworkAnalysisService]     Bytes: ${connection.traffic} bytes`);
-          console.log(`[NetworkAnalysisService]     Avg per packet: ${(connection.traffic / connection.packets).toFixed(1)} bytes`);
-          console.log(`[NetworkAnalysisService]     Last Seen: ${new Date(connection.lastSeen).toISOString()}`);
+        activeConnections.forEach(conn => {
+          console.log(`[NetworkAnalysisService]   Connection: ${conn.id}`);
+          console.log(`[NetworkAnalysisService]     Source: ${conn.sourceId}`);
+          console.log(`[NetworkAnalysisService]     Dest: ${conn.destId}`);
+          console.log(`[NetworkAnalysisService]     Protocol: ${conn.protocol}`);
+          console.log(`[NetworkAnalysisService]     Packets: ${conn.packets}`);
+          console.log(`[NetworkAnalysisService]     Bytes: ${conn.traffic} bytes`);
+          console.log(`[NetworkAnalysisService]     Avg per packet: ${(conn.traffic / conn.packets).toFixed(1)} bytes`);
+          console.log(`[NetworkAnalysisService]     Last Seen: ${new Date(conn.lastSeen).toISOString()}`);
         });
       }
     }

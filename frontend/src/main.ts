@@ -389,6 +389,7 @@ export class PacketViewApp {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
+    this.vizService.updateCursor(x, y);
     const device = this.vizService.getDeviceAtPosition(x, y);
 
     if (device) {
