@@ -2,11 +2,17 @@ import { EventEmitter } from 'events';
 import { spawn, ChildProcess } from 'child_process';
 import { Packet, InterfaceInfo } from '../shared/types';
 
+interface CaptureProcess {
+  process: ChildProcess;
+  interface: string;
+  filter?: string;
+  packetCount: number;
+}
+
 export class PacketCaptureService extends EventEmitter {
-  private captureProcess: ChildProcess | null = null;
-  private capturing: boolean = false;
+  private captureProcesses: Map<string, CaptureProcess> = new Map();
   private logEnabled: boolean;
-  private packetCount: number = 0;
+  private totalPacketCount: number = 0;
 
   constructor(logEnabled: boolean = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
     super();
@@ -41,10 +47,10 @@ export class PacketCaptureService extends EventEmitter {
 
   async start(interfaceName: string, filter?: string): Promise<void> {
     console.log('PacketCaptureService.start() called:', { interfaceName, filter });
-    console.log('Current capturing state:', this.capturing);
+    console.log('Current capturing state:', this.getCaptureStatus());
 
-    if (this.capturing) {
-      throw new Error('Capture already in progress');
+    if (this.captureProcesses.has(interfaceName)) {
+      throw new Error(`Capture already in progress on interface ${interfaceName}`);
     }
 
     const TCPDUMP_FLAGS = {
@@ -71,14 +77,22 @@ export class PacketCaptureService extends EventEmitter {
 
     console.log('Spawning tcpdump with args:', tcpdumpArgs);
 
-    this.captureProcess = spawn('tcpdump', tcpdumpArgs);
+    const captureProcess = spawn('tcpdump', tcpdumpArgs);
+    const processInfo: CaptureProcess = {
+      process: captureProcess,
+      interface: interfaceName,
+      filter,
+      packetCount: 0
+    };
 
-    this.captureProcess.on('error', (error) => {
-      this.emit('error', new Error(`Failed to start tcpdump: ${error.message}`));
-      this.stop();
+    this.captureProcesses.set(interfaceName, processInfo);
+
+    captureProcess.on('error', (error) => {
+      this.emit('error', new Error(`Failed to start tcpdump on ${interfaceName}: ${error.message}`));
+      this.stopInterface(interfaceName);
     });
 
-    this.captureProcess.stderr?.on('data', (data) => {
+    captureProcess.stderr?.on('data', (data) => {
       const errorMsg = data.toString();
 
       const isInfoMessage =
@@ -95,78 +109,149 @@ export class PacketCaptureService extends EventEmitter {
       }
     });
 
-    this.captureProcess.stdout?.on('data', (data) => {
+    captureProcess.stdout?.on('data', (data) => {
       const lines = data.toString().split('\n');
       for (const line of lines) {
         const trimmedLine = line.trim();
         if (trimmedLine) {
           const packet = this.parseTcpdumpLine(trimmedLine);
           if (packet) {
-            this.packetCount++;
-            if (this.logEnabled && this.packetCount % 100 === 0) {
-              console.log(`[PacketCaptureService] Processed ${this.packetCount} packets so far`);
+            // Add interface identifier to packet
+            packet.interface = interfaceName;
+            
+            processInfo.packetCount++;
+            this.totalPacketCount++;
+            
+            if (this.logEnabled && this.totalPacketCount % 100 === 0) {
+              console.log(`[PacketCaptureService] Processed ${this.totalPacketCount} packets total across ${this.captureProcesses.size} interfaces`);
             }
             if (this.logEnabled) {
-              console.log(`[PacketCaptureService] Packet captured: ${packet.sourceIp}:${packet.sourcePort} -> ${packet.destIp}:${packet.destPort} (${packet.protocol}, ${packet.size} bytes)`);
+              console.log(`[PacketCaptureService] Packet captured on ${interfaceName}: ${packet.sourceIp}:${packet.sourcePort} -> ${packet.destIp}:${packet.destPort} (${packet.protocol}, ${packet.size} bytes)`);
             }
             this.emit('packet', packet);
           } else if (this.logEnabled) {
-            console.log(`[PacketCaptureService] Failed to parse tcpdump line: ${trimmedLine}`);
+            console.log(`[PacketCaptureService] Failed to parse tcpdump line on ${interfaceName}: ${trimmedLine}`);
           }
         }
       }
     });
 
-    this.captureProcess.on('close', (code) => {
-      this.capturing = false;
+    captureProcess.on('close', (code) => {
+      this.captureProcesses.delete(interfaceName);
       if (code !== 0 && code !== null) {
-        this.emit('error', new Error(`tcpdump exited with code ${code}`));
+        this.emit('error', new Error(`tcpdump on ${interfaceName} exited with code ${code}`));
+      }
+      if (this.logEnabled) {
+        console.log(`[PacketCaptureService] Capture stopped on ${interfaceName}. Remaining active interfaces: ${this.captureProcesses.size}`);
       }
     });
 
-    this.capturing = true;
     if (this.logEnabled) {
-      console.log('[PacketCaptureService] Capture started successfully');
+      console.log(`[PacketCaptureService] Capture started successfully on ${interfaceName}. Active interfaces: ${this.captureProcesses.size}`);
     }
   }
 
   stop(): void {
-    if (this.logEnabled) {
-      console.log('[PacketCaptureService] stop() called, capturing:', this.capturing);
-      console.log(`[PacketCaptureService] Total packets captured in this session: ${this.packetCount}`);
-    }
+    this.stopAllInterfaces();
+  }
 
-    if (!this.capturing && !this.captureProcess) {
+  stopInterface(interfaceName: string): void {
+    const processInfo = this.captureProcesses.get(interfaceName);
+    if (!processInfo) {
       if (this.logEnabled) {
-        console.log('[PacketCaptureService] No capture process to stop');
+        console.log(`[PacketCaptureService] No capture process to stop on interface ${interfaceName}`);
       }
       return;
     }
 
-    if (this.captureProcess) {
-      if (this.logEnabled) {
-        console.log('[PacketCaptureService] Killing capture process with SIGTERM');
-      }
-      this.captureProcess.kill('SIGTERM');
-
-      this.captureProcess.on('exit', () => {
-        if (this.logEnabled) {
-          console.log('[PacketCaptureService] Capture process exited');
-        }
-      });
-
-      this.captureProcess = null;
+    if (this.logEnabled) {
+      console.log(`[PacketCaptureService] Stopping capture on interface ${interfaceName}. Packets captured: ${processInfo.packetCount}`);
     }
 
-    this.packetCount = 0;
-    this.capturing = false;
+    processInfo.process.kill('SIGTERM');
+    this.captureProcesses.delete(interfaceName);
+
     if (this.logEnabled) {
-      console.log('[PacketCaptureService] stop() completed');
+      console.log(`[PacketCaptureService] Capture stopped on ${interfaceName}. Remaining active interfaces: ${this.captureProcesses.size}`);
+    }
+  }
+
+  stopAllInterfaces(): void {
+    if (this.logEnabled) {
+      console.log(`[PacketCaptureService] stopAllInterfaces() called. Active interfaces: ${this.captureProcesses.size}`);
+      console.log(`[PacketCaptureService] Total packets captured in this session: ${this.totalPacketCount}`);
+    }
+
+    if (this.captureProcesses.size === 0) {
+      if (this.logEnabled) {
+        console.log('[PacketCaptureService] No capture processes to stop');
+      }
+      return;
+    }
+
+    for (const [interfaceName, processInfo] of this.captureProcesses) {
+      if (this.logEnabled) {
+        console.log(`[PacketCaptureService] Killing capture process on ${interfaceName} with SIGTERM`);
+      }
+      processInfo.process.kill('SIGTERM');
+    }
+
+    this.captureProcesses.clear();
+    this.totalPacketCount = 0;
+
+    if (this.logEnabled) {
+      console.log('[PacketCaptureService] All capture processes stopped');
     }
   }
 
   isCapturingActive(): boolean {
-    return this.capturing;
+    return this.captureProcesses.size > 0;
+  }
+
+  getCaptureStatus(): { active: boolean; interfaces: Array<{ name: string; packetCount: number; filter?: string }> } {
+    const interfaces = Array.from(this.captureProcesses.entries()).map(([name, process]) => ({
+      name,
+      packetCount: process.packetCount,
+      filter: process.filter
+    }));
+
+    return {
+      active: this.captureProcesses.size > 0,
+      interfaces
+    };
+  }
+
+  getActiveInterfaces(): string[] {
+    return Array.from(this.captureProcesses.keys());
+  }
+
+  async startMultiple(interfaceNames: string[], filter?: string): Promise<void> {
+    console.log('PacketCaptureService.startMultiple() called:', { interfaceNames, filter });
+
+    if (interfaceNames.length === 0) {
+      throw new Error('At least one interface must be specified');
+    }
+
+    // Check for duplicates
+    const duplicateInterfaces = interfaceNames.filter(name => this.captureProcesses.has(name));
+    if (duplicateInterfaces.length > 0) {
+      throw new Error(`Capture already in progress on interfaces: ${duplicateInterfaces.join(', ')}`);
+    }
+
+    // Start capture on each interface
+    const startPromises = interfaceNames.map(interfaceName => 
+      this.start(interfaceName, filter).catch(error => {
+        // If one interface fails, stop all that were started
+        this.stopAllInterfaces();
+        throw new Error(`Failed to start capture on ${interfaceName}: ${error.message}`);
+      })
+    );
+
+    await Promise.all(startPromises);
+
+    if (this.logEnabled) {
+      console.log(`[PacketCaptureService] Multi-interface capture started successfully on ${interfaceNames.length} interfaces`);
+    }
   }
 
   private parseIpOutput(output: string): InterfaceInfo[] {

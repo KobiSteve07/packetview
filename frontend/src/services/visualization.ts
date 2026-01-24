@@ -32,7 +32,8 @@ export class VisualizationService {
     ip: '',
     ipType: 'all',
     protocol: 'all',
-    broadcast: false
+    broadcast: false,
+    interface: 'all'
   };
 
   // Pan state
@@ -242,9 +243,12 @@ export class VisualizationService {
   }
 
   addPacketAnimation(connectionId: string, protocol: Types.Protocol): void {
-    if (this.packetAnimations.length > 50) {
-      return;
+    const MAX_ANIMATIONS = 100;
+    
+    if (this.packetAnimations.length >= MAX_ANIMATIONS) {
+      this.packetAnimations.shift();
     }
+    
     this.packetAnimations.push({
       connectionId,
       progress: 0,
@@ -304,18 +308,19 @@ export class VisualizationService {
     }
 
     const ANIMATION_SPEED = 0.02;
+    const ANIMATION_TIMEOUT_MS = 5000;
 
     this.packetAnimations = this.packetAnimations.filter(anim => {
       const connection = this.connections.get(anim.connectionId);
       if (!connection) {
-        return false;
+        return Date.now() - anim.timestamp < ANIMATION_TIMEOUT_MS;
       }
 
       const sourceDevice = this.devices.get(connection.sourceId);
       const destDevice = this.devices.get(connection.destId);
 
       if (!sourceDevice || !destDevice) {
-        return false;
+        return Date.now() - anim.timestamp < ANIMATION_TIMEOUT_MS;
       }
 
       if (!this.passesDeviceFilter(sourceDevice) || !this.passesDeviceFilter(destDevice)) {
@@ -592,7 +597,7 @@ export class VisualizationService {
   }
 
   private isMyDevice(device: Types.NetworkDevice): boolean {
-    return this.localIp !== null && device.ip === this.localIp;
+    return this.localIp !== null && device.ip === this.localIp && !device.ip.startsWith('127.');
   }
 
   private notifyDevicePositionChanged(device: Types.NetworkDevice): void {

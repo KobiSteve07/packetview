@@ -7,6 +7,7 @@ export interface Packet {
   protocol: Protocol;
   size: number;
   info?: string;
+  interface?: string; // Network interface where packet was captured
 }
 
 export enum Protocol {
@@ -61,8 +62,8 @@ export interface TrafficFlow {
 }
 
 export interface NetworkState {
-  devices: NetworkDevice[];
-  connections: NetworkConnection[];
+  devices: Map<string, NetworkDevice>;
+  connections: Map<string, NetworkConnection>;
   flows: TrafficFlow[];
 }
 
@@ -82,27 +83,23 @@ export enum WebSocketMessageType {
   ERROR = 'ERROR'
 }
 
-export interface FilterOptions {
-  ip: string;
-  ipType: 'all' | 'local' | 'public';
-  protocol: 'all' | Protocol;
-  broadcast: boolean;
-}
-
-export enum IpType {
-  ALL = 'all',
-  LOCAL = 'local',
-  PUBLIC = 'public'
-}
-
 export interface WebSocketMessage {
   type: WebSocketMessageType;
   data: any;
   timestamp: number;
 }
 
+export interface FilterOptions {
+  ip: string;
+  ipType: 'all' | 'local' | 'public';
+  protocol: 'all' | Protocol;
+  broadcast: boolean;
+  interface: string; // Interface filter option
+}
+
 export interface CaptureOptions {
-  interface: string;
+  interface?: string; // Single interface (for backward compatibility)
+  interfaces?: string[]; // Multiple interfaces
   filter?: string;
   promiscuous?: boolean;
 }

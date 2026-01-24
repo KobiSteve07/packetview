@@ -248,3 +248,61 @@ body {
 .protocol-legend .label {
   color: #a0a0a0;
 }
+
+/* Multi-interface selection styles */
+.interface-mode-selector {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 12px;
+  padding: 8px;
+  background-color: rgba(42, 42, 42, 0.5);
+  border-radius: 6px;
+  border: 1px solid #444;
+}
+
+.interface-mode-selector label {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #a0a0a0;
+  margin-bottom: 0;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.interface-mode-selector input[type="radio"] {
+  margin-right: 6px;
+}
+
+.interface-checkboxes {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: rgba(42, 42, 42, 0.3);
+  padding: 10px;
+}
+
+.interface-checkbox-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.interface-checkbox-item:hover {
+  background-color: rgba(74, 158, 255, 0.1);
+}
+
+.interface-checkbox-item label {
+  margin-bottom: 0;
+  cursor: pointer;
+  flex: 1;
+}
+
+.interface-checkbox-item input[type="checkbox"]:disabled + label {
+  color: #666;
+  cursor: not-allowed;
+}

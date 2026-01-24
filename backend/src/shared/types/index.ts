@@ -7,6 +7,7 @@ export interface Packet {
   protocol: Protocol;
   size: number;
   info?: string;
+  interface?: string; // Network interface where packet was captured
 }
 
 export enum Protocol {
@@ -88,8 +89,16 @@ export interface WebSocketMessage {
   timestamp: number;
 }
 
+export interface FilterOptions {
+  ip: string;
+  ipType: 'all' | 'local' | 'public';
+  protocol: 'all' | Protocol;
+  broadcast: boolean;
+}
+
 export interface CaptureOptions {
-  interface: string;
+  interface?: string; // Single interface (for backward compatibility)
+  interfaces?: string[]; // Multiple interfaces
   filter?: string;
   promiscuous?: boolean;
 }

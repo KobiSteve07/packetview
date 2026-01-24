@@ -42,6 +42,24 @@ if (DEV_MODE) {
   console.log('[Server] Services initialized with logging enabled');
 }
 
+// Auto-start capture on all available interfaces
+async function startAutoCapture() {
+  try {
+    const interfaces = await packetCapture.getInterfaces();
+    const activeInterfaces = interfaces.filter(iface => iface.isUp).map(iface => iface.name);
+    
+    if (activeInterfaces.length > 0) {
+      console.log(`[Server] Auto-starting capture on ${activeInterfaces.length} interfaces: ${activeInterfaces.join(', ')}`);
+      await packetCapture.startMultiple(activeInterfaces);
+      console.log('[Server] Auto-capture started successfully');
+    } else {
+      console.log('[Server] No active interfaces available for auto-capture');
+    }
+  } catch (error) {
+    console.error('[Server] Failed to auto-start capture:', error);
+  }
+}
+
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {
   const frontendPath = path.join(__dirname, '../../frontend/dist');
@@ -71,25 +89,38 @@ app.get('/api/interfaces', async (req, res) => {
 
 app.post('/api/capture/start', async (req, res) => {
   try {
-    const { interface: iface, filter } = req.body;
+    const { interface: iface, interfaces, filter } = req.body;
 
     if (DEV_MODE) {
-      console.log(`[API] POST /api/capture/start: interface=${iface}, filter=${filter || 'none'}`);
+      console.log(`[API] POST /api/capture/start: interface=${iface}, interfaces=${interfaces?.join(',') || 'none'}, filter=${filter || 'none'}`);
     }
 
-    if (!iface) {
+    // Support both single interface (backward compatibility) and multiple interfaces
+    const targetInterfaces = interfaces || (iface ? [iface] : []);
+
+    if (targetInterfaces.length === 0) {
       if (DEV_MODE) {
-        console.log('[API] Bad request: interface missing');
+        console.log('[API] Bad request: no interface specified');
       }
-      return res.status(400).json({ error: 'Interface is required' });
+      return res.status(400).json({ error: 'At least one interface must be specified' });
     }
 
-    await packetCapture.start(iface, filter);
+    if (targetInterfaces.length === 1) {
+      // Single interface mode (backward compatibility)
+      await packetCapture.start(targetInterfaces[0], filter);
+    } else {
+      // Multi-interface mode
+      await packetCapture.startMultiple(targetInterfaces, filter);
+    }
 
     if (DEV_MODE) {
-      console.log('[API] Capture started successfully');
+      console.log(`[API] Capture started successfully on ${targetInterfaces.length} interface(s)`);
     }
-    res.json({ success: true, message: 'Capture started' });
+    res.json({ 
+      success: true, 
+      message: `Capture started on ${targetInterfaces.length} interface(s)`,
+      interfaces: targetInterfaces
+    });
   } catch (error: any) {
     console.error('[API] Error starting capture:', error);
     res.status(500).json({ error: error.message || 'Failed to start capture' });
@@ -97,16 +128,28 @@ app.post('/api/capture/start', async (req, res) => {
 });
 
 app.post('/api/capture/stop', async (req, res) => {
-  if (DEV_MODE) {
-    console.log('[API] POST /api/capture/stop');
-  }
-
   try {
-    packetCapture.stop();
+    const { interface: iface } = req.body;
+
     if (DEV_MODE) {
-      console.log('[API] Capture stopped successfully');
+      console.log(`[API] POST /api/capture/stop: interface=${iface || 'all'}`);
     }
-    res.json({ success: true, message: 'Capture stopped' });
+
+    if (iface) {
+      // Stop specific interface
+      packetCapture.stopInterface(iface);
+      if (DEV_MODE) {
+        console.log(`[API] Capture stopped on interface ${iface}`);
+      }
+      res.json({ success: true, message: `Capture stopped on ${iface}` });
+    } else {
+      // Stop all interfaces (backward compatibility)
+      packetCapture.stopAllInterfaces();
+      if (DEV_MODE) {
+        console.log('[API] All captures stopped');
+      }
+      res.json({ success: true, message: 'All captures stopped' });
+    }
   } catch (error: any) {
     console.error('[API] Error stopping capture:', error);
     res.status(500).json({ error: error.message || 'Failed to stop capture' });
@@ -114,11 +157,51 @@ app.post('/api/capture/stop', async (req, res) => {
 });
 
 app.get('/api/capture/status', (req, res) => {
-  const isCapturing = packetCapture.isCapturingActive();
+  const status = packetCapture.getCaptureStatus();
   if (DEV_MODE) {
-    console.log(`[API] GET /api/capture/status: capturing=${isCapturing}`);
+    console.log(`[API] GET /api/capture/status: active=${status.active}, interfaces=${status.interfaces.length}`);
   }
-  res.json({ capturing: isCapturing });
+  res.json(status);
+});
+
+app.get('/api/capture/interfaces', (req, res) => {
+  const activeInterfaces = packetCapture.getActiveInterfaces();
+  if (DEV_MODE) {
+    console.log(`[API] GET /api/capture/interfaces: active=${activeInterfaces.length}`);
+  }
+  res.json({ interfaces: activeInterfaces });
+});
+
+app.post('/api/capture/interfaces', async (req, res) => {
+  try {
+    const { interfaces } = req.body;
+
+    if (DEV_MODE) {
+      console.log(`[API] POST /api/capture/interfaces: interfaces=${interfaces?.join(',')}`);
+    }
+
+    if (!interfaces || interfaces.length === 0) {
+      return res.status(400).json({ error: 'At least one interface must be specified' });
+    }
+
+    // Stop current capture and restart with new interfaces
+    const currentStatus = packetCapture.getCaptureStatus();
+    if (currentStatus.active) {
+      await packetCapture.stopAllInterfaces();
+    }
+
+    // Start capture with new interface selection
+    await packetCapture.startMultiple(interfaces);
+
+    if (DEV_MODE) {
+      console.log(`[API] Capture restarted with ${interfaces.length} interfaces`);
+    }
+
+    res.json({ success: true, interfaces });
+  } catch (error: any) {
+    console.error('[API] Error updating interfaces:', error);
+    res.status(500).json({ error: error.message || 'Failed to update interfaces' });
+  }
 });
 
 // WebSocket connection handling
@@ -228,4 +311,9 @@ server.listen(PORT, () => {
   console.log(`Date: ${new Date().toISOString()}`);
   console.log('========================================');
   console.log('Server ready and listening for connections...\n');
+  
+  // Start automatic capture after a short delay to ensure services are ready
+  setTimeout(() => {
+    startAutoCapture();
+  }, 1000);
 });
