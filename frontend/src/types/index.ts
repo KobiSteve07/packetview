@@ -86,6 +86,7 @@ export interface FilterOptions {
   ip: string;
   ipType: 'all' | 'local' | 'public';
   protocol: 'all' | Protocol;
+  broadcast: boolean;
 }
 
 export enum IpType {

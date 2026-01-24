@@ -73,7 +73,7 @@ body {
 }
 
 .control-panel select,
-.control-panel input {
+.control-panel input[type="text"] {
   width: 100%;
   padding: 8px;
   background-color: #2a2a2a;
@@ -81,6 +81,18 @@ body {
   border-radius: 4px;
   color: #e0e0e0;
   font-size: 14px;
+}
+
+.control-panel input[type="checkbox"] {
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.control-panel .checkbox-label {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #a0a0a0;
 }
 
 .control-panel button {

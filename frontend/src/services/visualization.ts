@@ -31,7 +31,8 @@ export class VisualizationService {
   private filters: Types.FilterOptions = {
     ip: '',
     ipType: 'all',
-    protocol: 'all'
+    protocol: 'all',
+    broadcast: false
   };
 
   // Pan state
@@ -243,6 +244,14 @@ export class VisualizationService {
         return false;
       }
 
+      if (!this.passesDeviceFilter(sourceDevice) || !this.passesDeviceFilter(destDevice)) {
+        return false;
+      }
+
+      if (this.filters.protocol !== 'all' && connection.protocol !== this.filters.protocol) {
+        return false;
+      }
+
       const x = sourceDevice.x + (destDevice.x - sourceDevice.x) * anim.progress;
       const y = sourceDevice.y + (destDevice.y - sourceDevice.y) * anim.progress;
 
@@ -304,7 +313,7 @@ export class VisualizationService {
   }
 
   private passesDeviceFilter(device: Types.NetworkDevice): boolean {
-    const { ip, ipType } = this.filters;
+    const { ip, ipType, broadcast } = this.filters;
 
     if (ipType === 'local' && !this.isLocalIP(device.ip)) {
       return false;
@@ -315,6 +324,10 @@ export class VisualizationService {
     }
 
     if (ip && !device.ip.includes(ip)) {
+      return false;
+    }
+
+    if (!broadcast && this.isBroadcastOrMulticast(device.ip)) {
       return false;
     }
 
@@ -340,6 +353,33 @@ export class VisualizationService {
         const secondOctet = parseInt(parts[1]);
         return secondOctet >= 16 && secondOctet <= 31;
       }
+    }
+
+    return false;
+  }
+
+  private isBroadcastOrMulticast(ip: string): boolean {
+    const parts = ip.split('.');
+    if (parts.length !== 4) {
+      return false;
+    }
+
+    const [first, second, third, fourth] = parts.map(part => parseInt(part, 10));
+
+    if (isNaN(first) || isNaN(second) || isNaN(third) || isNaN(fourth)) {
+      return false;
+    }
+
+    if (first === 255 && second === 255 && third === 255 && fourth === 255) {
+      return true;
+    }
+
+    if (first >= 224 && first <= 239) {
+      return true;
+    }
+
+    if (fourth === 255) {
+      return true;
     }
 
     return false;

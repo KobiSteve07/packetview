@@ -82,6 +82,12 @@ export class PacketViewApp {
             <option value="OTHER">OTHER</option>
           </select>
         </div>
+        <div class="filter-row">
+          <label for="broadcast-filter" class="checkbox-label">
+            <input type="checkbox" id="broadcast-filter" />
+            Show Broadcast/Multicast
+          </label>
+        </div>
       </div>
       <button id="start-capture-btn" disabled>Start Capture</button>
       <button id="stop-capture-btn" disabled>Stop Capture</button>
@@ -134,6 +140,7 @@ export class PacketViewApp {
     const ipFilterInput = document.getElementById('ip-filter') as HTMLInputElement;
     const ipTypeFilterSelect = document.getElementById('ip-type-filter') as HTMLSelectElement;
     const protocolFilterSelect = document.getElementById('protocol-filter') as HTMLSelectElement;
+    const broadcastFilterCheckbox = document.getElementById('broadcast-filter') as HTMLInputElement;
 
     interfaceSelect.addEventListener('change', (e) => {
       this.selectedInterface = (e.target as HTMLSelectElement).value;
@@ -148,13 +155,15 @@ export class PacketViewApp {
       this.vizService.setFilters({
         ip: ipFilterInput.value.trim(),
         ipType: ipTypeFilterSelect.value as 'all' | 'local' | 'public',
-        protocol: protocolFilterSelect.value === 'all' ? 'all' : protocolFilterSelect.value as Types.Protocol
+        protocol: protocolFilterSelect.value === 'all' ? 'all' : protocolFilterSelect.value as Types.Protocol,
+        broadcast: broadcastFilterCheckbox.checked
       });
     };
 
     ipFilterInput.addEventListener('input', updateFilters);
     ipTypeFilterSelect.addEventListener('change', updateFilters);
     protocolFilterSelect.addEventListener('change', updateFilters);
+    broadcastFilterCheckbox.addEventListener('change', updateFilters);
 
     startBtn.addEventListener('click', () => this.startCapture());
     stopBtn.addEventListener('click', () => this.stopCapture());
