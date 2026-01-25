@@ -94,6 +94,7 @@ export interface FilterOptions {
   ipType: 'all' | 'local' | 'public';
   protocol: 'all' | Protocol;
   broadcast: boolean;
+  networkInterface: string;
 }
 
 export interface CaptureOptions {

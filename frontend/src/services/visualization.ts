@@ -1,4 +1,4 @@
-import * as Types from '../types';
+import * as Types from '../../../shared/types';
 
 const PROTOCOL_COLORS: Record<Types.Protocol, string> = {
   'TCP': '#4a9eff',
@@ -33,7 +33,7 @@ export class VisualizationService {
     ipType: 'all',
     protocol: 'all',
     broadcast: false,
-    interface: 'all'
+    networkInterface: 'all'
   };
 
   // Pan state

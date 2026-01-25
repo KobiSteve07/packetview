@@ -94,12 +94,13 @@ export interface FilterOptions {
   ipType: 'all' | 'local' | 'public';
   protocol: 'all' | Protocol;
   broadcast: boolean;
-  interface: string; // Interface filter option
+  networkInterface: string;
 }
 
 export interface CaptureOptions {
-  interface?: string; // Single interface (for backward compatibility)
-  interfaces?: string[]; // Multiple interfaces
+  interface?: string;
+  interfaces?: string[];
+  networkInterface?: string;
   filter?: string;
   promiscuous?: boolean;
 }

@@ -1,30 +1,25 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { EventEmitter } from 'events';
 import { PacketCaptureService } from './services/PacketCaptureService';
 import { NetworkAnalysisService } from './services/NetworkAnalysisService';
-import { WebSocketMessage, WebSocketMessageType } from './shared/types';
+import { WebSocketMessage, WebSocketMessageType, Packet } from './shared/types';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
+import { logger } from './utils/logger';
+import { CONFIG } from './config/constants';
 
 const app = express();
 const server = createServer(app);
-const PORT = process.env.PORT || 3001;
-const DEV_MODE = process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
 
-if (DEV_MODE) {
-  console.log('========================================');
-  console.log('PacketView Backend - DEVELOPMENT MODE');
-  console.log('========================================');
-  console.log(`Port: ${PORT}`);
-  console.log(`Debug logging: ENABLED`);
-  console.log(`Date: ${new Date().toISOString()}`);
-  console.log('========================================\n');
+if (CONFIG.NODE_ENV === 'development') {
+  logger.info('PacketView Backend - DEVELOPMENT MODE', { port: CONFIG.PORT, debugLogging: 'ENABLED', date: new Date().toISOString() });
 }
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: CONFIG.CORS_ORIGINS,
   methods: ['GET', 'POST'],
   credentials: true
 }));
@@ -32,21 +27,21 @@ app.use(cors({
 app.use(express.json());
 
 // WebSocket server
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ server, path: CONFIG.WEBSOCKET_PATH });
 
 // Services
-const packetCapture = new PacketCaptureService(DEV_MODE);
-const networkAnalysis = new NetworkAnalysisService(DEV_MODE);
+const packetCapture = new PacketCaptureService(CONFIG.NODE_ENV === 'development');
+const networkAnalysis = new NetworkAnalysisService(CONFIG.NODE_ENV === 'development');
 
-if (DEV_MODE) {
-  console.log('[Server] Services initialized with logging enabled');
+if (CONFIG.NODE_ENV === 'development') {
+  logger.info('[Server] Services initialized with logging enabled');
 }
 
 // Auto-start capture on all available interfaces (only if not disabled)
 async function startAutoCapture() {
   // Skip auto-capture if disabled
-  if (process.env.DISABLE_AUTO_CAPTURE === 'true' || process.env.DISABLE_PACKET_CAPTURE === 'true') {
-    console.log('[Server] Auto-capture disabled by environment variable');
+  if (CONFIG.DISABLE_AUTO_CAPTURE || CONFIG.DISABLE_PACKET_CAPTURE) {
+    logger.info('[Server] Auto-capture disabled by environment variable');
     return;
   }
   
@@ -55,14 +50,14 @@ async function startAutoCapture() {
     const activeInterfaces = interfaces.filter(iface => iface.isUp).map(iface => iface.name);
     
     if (activeInterfaces.length > 0) {
-      console.log(`[Server] Auto-starting capture on ${activeInterfaces.length} interfaces: ${activeInterfaces.join(', ')}`);
+      logger.info(`[Server] Auto-starting capture on ${activeInterfaces.length} interfaces: ${activeInterfaces.join(', ')}`);
       await packetCapture.startMultiple(activeInterfaces);
-      console.log('[Server] Auto-capture started successfully');
+      logger.info('[Server] Auto-capture started successfully');
     } else {
-      console.log('[Server] No active interfaces available for auto-capture');
+      logger.info('[Server] No active interfaces available for auto-capture');
     }
   } catch (error) {
-    console.error('[Server] Failed to auto-start capture:', error);
+    logger.error('[Server] Failed to auto-start capture:', error);
   }
 }
 
@@ -71,7 +66,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    port: PORT
+    port: CONFIG.PORT
   });
 });
 
@@ -80,8 +75,8 @@ app.use(express.json());
 // API routes
 app.get('/api/interfaces', async (req, res) => {
   try {
-    if (DEV_MODE) {
-      console.log('[API] GET /api/interfaces');
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info('[API] GET /api/interfaces');
     }
     const interfaces = await packetCapture.getInterfaces();
     res.json({ interfaces });
@@ -95,17 +90,18 @@ app.post('/api/capture/start', async (req, res) => {
   try {
     const { interface: iface, interfaces, filter } = req.body;
 
-    if (DEV_MODE) {
-      console.log(`[API] POST /api/capture/start: interface=${iface}, interfaces=${interfaces?.join(',') || 'none'}, filter=${filter || 'none'}`);
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info(`[API] POST /api/capture/start: interface=${iface}, interfaces=${interfaces?.join(',') || 'none'}, filter=${filter || 'none'}`);
     }
 
     // Support both single interface (backward compatibility) and multiple interfaces
     const targetInterfaces = interfaces || (iface ? [iface] : []);
 
     if (targetInterfaces.length === 0) {
-      if (DEV_MODE) {
-        console.log('[API] Bad request: no interface specified');
-      }
+     if (CONFIG.NODE_ENV === 'development') {
+       logger.info(`[API] Bad request: no interface specified`);
+       return res.status(400).json({ error: 'At least one interface must be specified' });
+     }
       return res.status(400).json({ error: 'At least one interface must be specified' });
     }
 
@@ -117,8 +113,8 @@ app.post('/api/capture/start', async (req, res) => {
       await packetCapture.startMultiple(targetInterfaces, filter);
     }
 
-    if (DEV_MODE) {
-      console.log(`[API] Capture started successfully on ${targetInterfaces.length} interface(s)`);
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info(`[API] Capture started successfully on ${targetInterfaces.length} interface(s)`);
     }
     res.json({ 
       success: true, 
@@ -135,22 +131,22 @@ app.post('/api/capture/stop', async (req, res) => {
   try {
     const { interface: iface } = req.body;
 
-    if (DEV_MODE) {
-      console.log(`[API] POST /api/capture/stop: interface=${iface || 'all'}`);
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info(`[API] POST /api/capture/stop: interface=${iface || 'all'}`);
     }
 
     if (iface) {
       // Stop specific interface
       packetCapture.stopInterface(iface);
-      if (DEV_MODE) {
+      if (CONFIG.NODE_ENV === 'development') {
         console.log(`[API] Capture stopped on interface ${iface}`);
       }
       res.json({ success: true, message: `Capture stopped on ${iface}` });
     } else {
       // Stop all interfaces (backward compatibility)
       packetCapture.stopAllInterfaces();
-      if (DEV_MODE) {
-        console.log('[API] All captures stopped');
+      if (CONFIG.NODE_ENV === 'development') {
+        logger.info('[API] All captures stopped');
       }
       res.json({ success: true, message: 'All captures stopped' });
     }
@@ -162,16 +158,16 @@ app.post('/api/capture/stop', async (req, res) => {
 
 app.get('/api/capture/status', (req, res) => {
   const status = packetCapture.getCaptureStatus();
-  if (DEV_MODE) {
-    console.log(`[API] GET /api/capture/status: active=${status.active}, interfaces=${status.interfaces.length}`);
+  if (CONFIG.NODE_ENV === 'development') {
+    logger.info(`[API] GET /api/capture/status: active=${status.active}, interfaces=${status.interfaces.length}`);
   }
   res.json(status);
 });
 
 app.get('/api/capture/interfaces', (req, res) => {
   const activeInterfaces = packetCapture.getActiveInterfaces();
-  if (DEV_MODE) {
-    console.log(`[API] GET /api/capture/interfaces: active=${activeInterfaces.length}`);
+  if (CONFIG.NODE_ENV === 'development') {
+    logger.info(`[API] GET /api/capture/interfaces: active=${activeInterfaces.length}`);
   }
   res.json({ interfaces: activeInterfaces });
 });
@@ -180,8 +176,8 @@ app.post('/api/capture/interfaces', async (req, res) => {
   try {
     const { interfaces } = req.body;
 
-    if (DEV_MODE) {
-      console.log(`[API] POST /api/capture/interfaces: interfaces=${interfaces?.join(',')}`);
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info(`[API] POST /api/capture/interfaces: interfaces=${interfaces?.join(',')}`);
     }
 
     if (!interfaces || interfaces.length === 0) {
@@ -197,8 +193,8 @@ app.post('/api/capture/interfaces', async (req, res) => {
     // Start capture with new interface selection
     await packetCapture.startMultiple(interfaces);
 
-    if (DEV_MODE) {
-      console.log(`[API] Capture restarted with ${interfaces.length} interfaces`);
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info(`[API] Capture restarted with ${interfaces.length} interfaces`);
     }
 
     res.json({ success: true, interfaces });
@@ -219,116 +215,137 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
-// WebSocket connection handling
+function broadcastMessage(message: Omit<WebSocketMessage, 'timestamp'>) {
+  const fullMessage: WebSocketMessage = {
+    ...message,
+    timestamp: Date.now()
+  };
+
+  const messageStr = JSON.stringify(fullMessage);
+  
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(messageStr);
+    }
+  });
+
+  if (CONFIG.NODE_ENV === 'development') {
+    logger.info(`[WebSocket] Broadcasted message: ${message.type} to ${wss.clients.size} clients`);
+  }
+}
+
 wss.on('connection', (ws: WebSocket) => {
-  if (DEV_MODE) {
-    console.log(`[WebSocket] New client connected. Total clients: ${wss.clients.size}`);
+  if (CONFIG.NODE_ENV === 'development') {
+    logger.info(`[WebSocket] New client connected. Total clients: ${wss.clients.size}`);
   }
 
-  // Send initial interface list
+  const networkState = networkAnalysis.getNetworkState();
+  broadcastMessage({
+    type: WebSocketMessageType.NETWORK_STATE,
+    data: {
+      devices: Array.from(networkState.devices.values()),
+      connections: Array.from(networkState.connections.values()),
+      flows: networkState.flows
+    }
+  });
+
   packetCapture.getInterfaces().then(interfaces => {
-    const message: WebSocketMessage = {
+    broadcastMessage({
       type: WebSocketMessageType.INTERFACE_LIST,
-      data: interfaces,
-      timestamp: Date.now()
-    };
-    ws.send(JSON.stringify(message));
-    if (DEV_MODE) {
-      console.log(`[WebSocket] Sent interface list to client: ${interfaces.length} interfaces`);
-    }
+      data: interfaces
+    });
   });
-
-  // Setup packet capture events
-  packetCapture.on('packet', (packet) => {
-    const analyzed = networkAnalysis.analyzePacket(packet);
-
-    const message: WebSocketMessage = {
-      type: WebSocketMessageType.PACKET,
-      data: analyzed,
-      timestamp: Date.now()
-    };
-
-    ws.send(JSON.stringify(message));
-  });
-
-  packetCapture.on('error', (error) => {
-    console.error('[PacketCaptureService] Error:', error);
-    const message: WebSocketMessage = {
-      type: WebSocketMessageType.ERROR,
-      data: { error: error.message },
-      timestamp: Date.now()
-    };
-    ws.send(JSON.stringify(message));
-  });
-
-  const STATE_UPDATE_INTERVAL = 500;
-  let updateCount = 0;
-
-  const stateInterval = setInterval(() => {
-    updateCount++;
-    const state = networkAnalysis.getNetworkState();
-
-    const serializedState = {
-      devices: Array.from(state.devices.values()),
-      connections: Array.from(state.connections.values()),
-      flows: state.flows
-    };
-
-    const message: WebSocketMessage = {
-      type: WebSocketMessageType.NETWORK_STATE,
-      data: serializedState,
-      timestamp: Date.now()
-    };
-    ws.send(JSON.stringify(message));
-
-    if (DEV_MODE && updateCount % 30 === 0) {
-      console.log(`[WebSocket] Sent state update #${updateCount}: ${serializedState.devices.length} devices, ${serializedState.connections.length} connections`);
-    }
-  }, STATE_UPDATE_INTERVAL);
 
   ws.on('close', () => {
-    if (DEV_MODE) {
-      console.log(`[WebSocket] Client disconnected. Total clients: ${wss.clients.size}`);
-    }
-    clearInterval(stateInterval);
+    logger.info(`[WebSocket] Client disconnected. Total clients: ${wss.clients.size}`);
   });
 
   ws.on('error', (error) => {
-    console.error('[WebSocket] Error:', error);
+    logger.error('[WebSocket] Error:', error);
   });
+});
+
+packetCapture.on('packet', (packet: Packet) => {
+  networkAnalysis.analyzePacket(packet);
+  broadcastMessage({
+    type: WebSocketMessageType.PACKET,
+    data: packet
+  });
+});
+
+let networkStateInterval: NodeJS.Timeout;
+
+function startNetworkStateBroadcast() {
+  networkStateInterval = setInterval(() => {
+    if (wss.clients.size > 0) {
+      const networkState = networkAnalysis.getNetworkState();
+      broadcastMessage({
+        type: WebSocketMessageType.NETWORK_STATE,
+        data: {
+          devices: Array.from(networkState.devices.values()),
+          connections: Array.from(networkState.connections.values()),
+          flows: networkState.flows
+        }
+      });
+    }
+  }, 2000);
+}
+
+function stopNetworkStateBroadcast() {
+  if (networkStateInterval) {
+    clearInterval(networkStateInterval);
+    networkStateInterval = undefined as any;
+  }
+}
+
+wss.on('connection', () => {
+  if (wss.clients.size === 1 && !networkStateInterval) {
+    startNetworkStateBroadcast();
+  }
+});
+
+wss.on('close', () => {
+  if (wss.clients.size === 0 && networkStateInterval) {
+    stopNetworkStateBroadcast();
+  }
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  packetCapture.stop();
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
+  process.on('SIGTERM', () => {
+    packetCapture.stop();
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
+    });
   });
-});
 
 process.on('SIGINT', () => {
-  packetCapture.stop();
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
+    packetCapture.stop();
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
+    });
   });
-});
 
 // Start server
-server.listen(PORT, () => {
-  console.log('========================================');
-  console.log('PacketView Backend Server');
-  console.log('========================================');
-  console.log(`HTTP Server: http://localhost:${PORT}`);
-  console.log(`WebSocket: ws://localhost:${PORT}/ws`);
-  console.log(`Mode: ${DEV_MODE ? 'DEVELOPMENT (verbose logging)' : 'PRODUCTION'}`);
-  console.log(`Date: ${new Date().toISOString()}`);
-  console.log('========================================');
-  console.log('Server ready and listening for connections...\n');
+server.listen(CONFIG.PORT, () => {
+  logger.info('========================================');
+  logger.info('PacketView Backend Server');
+  logger.info('========================================');
+  logger.info(`HTTP Server: http://localhost:${CONFIG.PORT}`);
+  logger.info(`WebSocket: ws://localhost:${CONFIG.PORT}/ws`);
+  logger.info(`Mode: ${CONFIG.NODE_ENV === 'development' ? 'DEVELOPMENT (verbose logging)' : 'PRODUCTION'}`);
+  logger.info(`Date: ${new Date().toISOString()}`);
+  logger.info('========================================');
+  logger.info('Server ready and listening for connections...\n');
   
   // Start automatic capture after a short delay to ensure services are ready
   setTimeout(() => {
     startAutoCapture();
   }, 1000);
+});
+
+server.on('error', (error: any) => {
+  logger.error('Server failed to start:', error);
+  process.exit(1);
 });

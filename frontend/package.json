@@ -6,16 +6,19 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
+    "@typescript-eslint/eslint-plugin": "^8.53.1",
+    "@typescript-eslint/parser": "^8.53.1",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
     "typescript": "~5.9.3",
     "vite": "^7.2.4"
-  },
-  "dependencies": {
-    "@types/d3": "^7.4.3",
-    "d3": "^7.9.0",
-    "three": "^0.182.0"
   }
 }

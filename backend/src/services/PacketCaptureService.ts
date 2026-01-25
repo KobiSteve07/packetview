@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { spawn, ChildProcess } from 'child_process';
 import { Packet, InterfaceInfo } from '../shared/types';
+import { logger } from '../utils/logger';
 
 interface CaptureProcess {
   process: ChildProcess;

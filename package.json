@@ -2,8 +2,40 @@
   "name": "packetview",
   "version": "0.1.0",
   "author": "",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "backend:dev": "cd backend && npm run dev",
+    "backend:build": "cd backend && npm run build",
+    "backend:test": "cd backend && npm run test",
+    "backend:lint": "cd backend && npm run lint",
+    "frontend:dev": "cd frontend && npm run dev",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:lint": "cd frontend && npm run lint",
+    "frontend:test": "cd frontend && echo 'No tests configured yet'",
+    "install:all": "npm install && npm run build && npm run test && npm run lint",
+    "dev": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "start": "cd backend && NODE_ENV=production npm start",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "clean": "npm run clean --workspaces && rm -rf node_modules",
+    "docker:build": "docker-compose build --no-cache",
+    "docker:up": "docker-compose up -d --build",
+    "docker:down": "docker-compose down --volumes"
+  },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "@typescript-eslint/eslint-plugin": "^8.53.1",
+    "@typescript-eslint/parser": "^8.53.1",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.8.1"
   },
   "description": "Real-time 2D network traffic visualization tool",
   "keywords": [
@@ -13,13 +45,10 @@
     "packet-capture"
   ],
   "license": "MIT",
-  "scripts": {
-    "backend:dev": "cd backend && npm run dev",
-    "backend:build": "cd backend && npm run build",
-    "frontend:dev": "cd frontend && npm run dev",
-    "frontend:build": "cd frontend && npm run build",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "dev": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
-    "start": "cd backend && NODE_ENV=production npm start"
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "pre-push": "npm run test && npm run lint"
+    }
   }
 }

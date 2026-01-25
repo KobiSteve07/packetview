@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from '@jest/globals';
 import { NetworkAnalysisService } from '../src/services/NetworkAnalysisService';
-import { Packet, Protocol, DeviceType } from '../src/shared/types';
+import { Packet, Protocol, DeviceType } from '../../shared/types';
 
 describe('NetworkAnalysisService', () => {
   let service: NetworkAnalysisService;
@@ -175,7 +175,9 @@ describe('NetworkAnalysisService', () => {
         }
       ];
 
-      packets.forEach(p => service.analyzePacket(p));
+      packets.forEach(p => {
+        service.analyzePacket(p);
+      });
 
       const devices = service.getAllDevices();
       expect(devices.length).toBe(3);
@@ -292,7 +294,9 @@ describe('NetworkAnalysisService', () => {
         }
       ];
 
-      packets.forEach(p => service.analyzePacket(p));
+      packets.forEach(p => {
+        service.analyzePacket(p);
+      });
 
       const connections = service.getAllConnections();
       expect(connections.length).toBe(2);
@@ -320,7 +324,9 @@ describe('NetworkAnalysisService', () => {
         }
       ];
 
-      packets.forEach(p => service.analyzePacket(p));
+      packets.forEach(p => {
+        service.analyzePacket(p);
+      });
 
       const connections = service.getAllConnections();
       expect(connections.length).toBe(2);
@@ -472,7 +478,9 @@ describe('NetworkAnalysisService', () => {
         }
       ];
 
-      packets.forEach(p => service.analyzePacket(p));
+      packets.forEach(p => {
+        service.analyzePacket(p);
+      });
 
       const devices = service.getAllDevices();
       expect(devices.length).toBe(4);

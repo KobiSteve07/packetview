@@ -1,4 +1,4 @@
-import * as Types from '../types';
+import * as Types from '../../../shared/types';
 
 export class WebSocketService {
   private ws: WebSocket | null = null;

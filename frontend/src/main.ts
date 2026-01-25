@@ -1,6 +1,6 @@
 import { WebSocketService } from './services/api';
 import { VisualizationService } from './services/visualization';
-import * as Types from './types';
+import * as Types from './shared/types';
 import './styles/global.css';
 
 export class PacketViewApp {
@@ -141,7 +141,7 @@ export class PacketViewApp {
         ipType: ipTypeFilterSelect.value as 'all' | 'local' | 'public',
         protocol: protocolFilterSelect.value === 'all' ? 'all' : protocolFilterSelect.value as Types.Protocol,
         broadcast: broadcastFilterCheckbox.checked,
-        interface: interfaceFilter.value
+        networkInterface: interfaceFilter.value
       });
     };
 
