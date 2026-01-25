@@ -97,6 +97,90 @@ npm run build      # Build for production
 npm run preview    # Preview production build
 ```
 
+## Docker Deployment
+
+### Prerequisites for Docker
+- Docker 20.10+
+- Docker Compose v2.0+
+- Host system needs libpcap capabilities for packet capture
+
+### Quick Start with Docker
+```bash
+# Build and start all services
+docker-compose up --build -d
+
+# Access the application
+open http://localhost
+
+# Stop services
+docker-compose down
+```
+
+### Packet Capture in Docker
+
+⚠️ **Important**: Packet capture requires elevated privileges in containers.
+
+#### Option 1: Enable Privileged Mode
+Uncomment line 19 in `docker-compose.yml`:
+```yaml
+privileged: true  # Uncomment for packet capture in production
+```
+
+#### Option 2: Use Development Config
+```bash
+docker-compose -f docker-compose.dev.yml up --build -d
+```
+
+#### Option 3: Manual Privileges
+```bash
+docker-compose up --build -d --privileged
+```
+
+### Docker Services
+- **Frontend**: Available at http://localhost (Nginx on port 80)
+- **Backend**: Available at http://localhost:3001 (Node.js API) 
+- **WebSocket**: ws://localhost:3001/ws (real-time packet data)
+
+### Docker Development
+```bash
+# Build individual services
+docker-compose build backend
+docker-compose build frontend
+
+# Run specific service
+docker-compose up backend
+docker-compose up frontend
+
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+```
+
+### Production Considerations
+- Packet capture requires `NET_RAW` and `NET_ADMIN` capabilities or privileged mode
+- Backend runs as non-root user but still needs capabilities  
+- Frontend uses Nginx with security headers and gzip compression
+- Health checks configured for both services
+- See `DOCKER.md` for detailed deployment guide
+
+### Docker Troubleshooting
+```bash
+# Check container status
+docker-compose ps
+
+# View real-time logs
+docker-compose logs -f
+
+# Restart services
+docker-compose restart
+
+# Clean up containers and images
+docker-compose down -v --rmi all
+```
+
+### Documentation
+📖 See `DOCKER.md` for comprehensive Docker deployment guide.
+
 ## Testing
 
 

@@ -42,8 +42,14 @@ if (DEV_MODE) {
   console.log('[Server] Services initialized with logging enabled');
 }
 
-// Auto-start capture on all available interfaces
+// Auto-start capture on all available interfaces (only if not disabled)
 async function startAutoCapture() {
+  // Skip auto-capture if disabled
+  if (process.env.DISABLE_AUTO_CAPTURE === 'true' || process.env.DISABLE_PACKET_CAPTURE === 'true') {
+    console.log('[Server] Auto-capture disabled by environment variable');
+    return;
+  }
+  
   try {
     const interfaces = await packetCapture.getInterfaces();
     const activeInterfaces = interfaces.filter(iface => iface.isUp).map(iface => iface.name);
@@ -60,16 +66,14 @@ async function startAutoCapture() {
   }
 }
 
-// Serve frontend in production
-if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, '../../frontend/dist');
-  if (fs.existsSync(frontendPath)) {
-    app.use(express.static(frontendPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(frontendPath, 'index.html'));
-    });
-  }
-}
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    port: PORT
+  });
+});
 
 app.use(express.json());
 
@@ -203,6 +207,17 @@ app.post('/api/capture/interfaces', async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to update interfaces' });
   }
 });
+
+// Serve frontend in production
+if (process.env.NODE_ENV === 'production') {
+  const frontendPath = path.join(__dirname, '../../frontend/dist');
+  if (fs.existsSync(frontendPath)) {
+    app.use(express.static(frontendPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    });
+  }
+}
 
 // WebSocket connection handling
 wss.on('connection', (ws: WebSocket) => {
