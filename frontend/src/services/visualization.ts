@@ -56,6 +56,17 @@ export class VisualizationService {
   private minZoom: number = 0.1;
   private maxZoom: number = 5;
 
+  // Touch state
+  private isPinching: boolean = false;
+  private initialPinchDistance: number = 0;
+  private initialPinchCenter: { x: number; y: number } | null = null;
+  private initialPinchWorldCenter: { x: number; y: number } | null = null;
+  private initialZoomScale: number = 1;
+  private touchPanStartX: number = 0;
+  private touchPanStartY: number = 0;
+  private touchPanStartOffsetX: number = 0;
+  private touchPanStartOffsetY: number = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -165,6 +176,145 @@ export class VisualizationService {
       this.panOffsetY = mouseY - worldY * newZoomScale;
       this.zoomScale = newZoomScale;
     }, { passive: false });
+
+    // Touch start handler
+    this.canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        const clickedDevice = this.getDeviceAtPosition(x, y);
+        if (clickedDevice) {
+          this.isDraggingDevice = true;
+          this.draggedDevice = clickedDevice;
+          const worldCoords = this.screenToWorld(x, y);
+          this.deviceDragOffsetX = worldCoords.x - clickedDevice.x;
+          this.deviceDragOffsetY = worldCoords.y - clickedDevice.y;
+          this.canvas.style.cursor = 'move';
+        } else {
+          this.isDragging = true;
+          this.touchPanStartX = touch.clientX;
+          this.touchPanStartY = touch.clientY;
+          this.touchPanStartOffsetX = this.panOffsetX;
+          this.touchPanStartOffsetY = this.panOffsetY;
+          this.canvas.style.cursor = 'grabbing';
+        }
+      } else if (e.touches.length === 2) {
+        this.isPinching = true;
+        this.isDragging = false;
+        this.isDraggingDevice = false;
+
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+
+        const x1 = touch1.clientX - rect.left;
+        const y1 = touch1.clientY - rect.top;
+        const x2 = touch2.clientX - rect.left;
+        const y2 = touch2.clientY - rect.top;
+
+        this.initialPinchDistance = this.getDistance(x1, y1, x2, y2);
+        this.initialPinchCenter = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+        this.initialPinchWorldCenter = {
+          x: (this.initialPinchCenter.x - this.panOffsetX) / this.zoomScale,
+          y: (this.initialPinchCenter.y - this.panOffsetY) / this.zoomScale
+        };
+        this.initialZoomScale = this.zoomScale;
+        this.canvas.style.cursor = 'grabbing';
+      }
+    }, { passive: false });
+
+    // Touch move handler
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const rect = this.canvas.getBoundingClientRect();
+
+      if (this.isDraggingDevice && this.draggedDevice && e.touches.length === 1) {
+        const touch = e.touches[0];
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        const worldCoords = this.screenToWorld(x, y);
+
+        this.draggedDevice.x = worldCoords.x - this.deviceDragOffsetX;
+        this.draggedDevice.y = worldCoords.y - this.deviceDragOffsetY;
+
+        this.notifyDevicePositionChanged(this.draggedDevice);
+      } else if (this.isDragging && e.touches.length === 1) {
+        const touch = e.touches[0];
+        const dx = touch.clientX - this.touchPanStartX;
+        const dy = touch.clientY - this.touchPanStartY;
+        this.panOffsetX = this.touchPanStartOffsetX + dx;
+        this.panOffsetY = this.touchPanStartOffsetY + dy;
+      } else if (this.isPinching && e.touches.length === 2 && this.initialPinchCenter && this.initialPinchWorldCenter) {
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+
+        const x1 = touch1.clientX - rect.left;
+        const y1 = touch1.clientY - rect.top;
+        const x2 = touch2.clientX - rect.left;
+        const y2 = touch2.clientY - rect.top;
+
+        const currentPinchDistance = this.getDistance(x1, y1, x2, y2);
+        const currentPinchCenter = { x: (x1 + x2) / 2, y: (y1 + y2) / 2 };
+
+        const zoomFactor = currentPinchDistance / this.initialPinchDistance;
+        const newZoomScale = Math.max(this.minZoom, Math.min(this.maxZoom, this.initialZoomScale * zoomFactor));
+
+        this.panOffsetX = currentPinchCenter.x - this.initialPinchWorldCenter.x * newZoomScale;
+        this.panOffsetY = currentPinchCenter.y - this.initialPinchWorldCenter.y * newZoomScale;
+        this.zoomScale = newZoomScale;
+      }
+    }, { passive: false });
+
+    // Touch end handler
+    this.canvas.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0) {
+        if (this.isDraggingDevice) {
+          this.isDraggingDevice = false;
+          this.canvas.style.cursor = 'grab';
+          setTimeout(() => {
+            this.draggedDevice = null;
+          }, 50);
+        } else if (this.isDragging) {
+          this.isDragging = false;
+          this.canvas.style.cursor = 'grab';
+        } else if (this.isPinching) {
+          this.isPinching = false;
+          this.initialPinchCenter = null;
+          this.initialPinchWorldCenter = null;
+          this.canvas.style.cursor = 'grab';
+        }
+      } else if (e.touches.length === 1 && this.isPinching) {
+        this.isPinching = false;
+        this.initialPinchCenter = null;
+        this.initialPinchWorldCenter = null;
+
+        const touch = e.touches[0];
+        const rect = this.canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        const clickedDevice = this.getDeviceAtPosition(x, y);
+        if (clickedDevice) {
+          this.isDraggingDevice = true;
+          this.draggedDevice = clickedDevice;
+          const worldCoords = this.screenToWorld(x, y);
+          this.deviceDragOffsetX = worldCoords.x - clickedDevice.x;
+          this.deviceDragOffsetY = worldCoords.y - clickedDevice.y;
+          this.canvas.style.cursor = 'move';
+        } else {
+          this.isDragging = true;
+          this.touchPanStartX = touch.clientX;
+          this.touchPanStartY = touch.clientY;
+          this.touchPanStartOffsetX = this.panOffsetX;
+          this.touchPanStartOffsetY = this.panOffsetY;
+          this.canvas.style.cursor = 'grabbing';
+        }
+      }
+    });
   }
 
   resetView(): void {
@@ -666,5 +816,11 @@ export class VisualizationService {
     const baseRadius = 25;
     const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
     return baseRadius + trafficBonus;
+  }
+
+  private getDistance(x1: number, y1: number, x2: number, y2: number): number {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 }
