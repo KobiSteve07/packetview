@@ -44,7 +44,7 @@
     "tcpdump",
     "packet-capture"
   ],
-  "license": "MIT",
+  "license": "GPL-3.0",
   "husky": {
     "hooks": {
       "pre-commit": "lint-staged",

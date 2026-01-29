@@ -2,6 +2,7 @@
   "name": "packetview-backend",
   "version": "0.1.0",
   "description": "Backend for PacketView - Real-time network traffic visualization",
+  "license": "GPL-3.0",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
