@@ -95,6 +95,7 @@ export interface FilterOptions {
   protocol: 'all' | Protocol;
   broadcast: boolean;
   networkInterface: string;
+  showLocalDevice: boolean;
 }
 
 export interface CaptureOptions {

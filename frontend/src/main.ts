@@ -85,6 +85,12 @@ export class PacketViewApp {
             Show Broadcast/Multicast
           </label>
         </div>
+        <div class="filter-row">
+          <label for="local-device-filter" class="checkbox-label">
+            <input type="checkbox" id="local-device-filter" checked />
+            Show Scanning Device
+          </label>
+        </div>
       </div>
        <button id="reset-view-btn">Reset View</button>
        <button id="toggle-animations-btn">Disable Animations</button>
@@ -134,6 +140,7 @@ export class PacketViewApp {
     const protocolFilterSelect = document.getElementById('protocol-filter') as HTMLSelectElement;
     const broadcastFilterCheckbox = document.getElementById('broadcast-filter') as HTMLInputElement;
     const interfaceFilter = document.getElementById('interface-filter') as HTMLSelectElement;
+    const localDeviceFilterCheckbox = document.getElementById('local-device-filter') as HTMLInputElement;
 
     const updateFilters = () => {
       this.vizService.setFilters({
@@ -141,7 +148,8 @@ export class PacketViewApp {
         ipType: ipTypeFilterSelect.value as 'all' | 'local' | 'public',
         protocol: protocolFilterSelect.value === 'all' ? 'all' : protocolFilterSelect.value as Types.Protocol,
         broadcast: broadcastFilterCheckbox.checked,
-        networkInterface: interfaceFilter.value
+        networkInterface: interfaceFilter.value,
+        showLocalDevice: localDeviceFilterCheckbox.checked
       });
     };
 
@@ -150,6 +158,7 @@ export class PacketViewApp {
     protocolFilterSelect.addEventListener('change', updateFilters);
     broadcastFilterCheckbox.addEventListener('change', updateFilters);
     interfaceFilter.addEventListener('change', updateFilters);
+    localDeviceFilterCheckbox.addEventListener('change', updateFilters);
 
     resetViewBtn.addEventListener('click', () => this.vizService.resetView());
     document.getElementById('toggle-animations-btn')?.addEventListener('click', () => {

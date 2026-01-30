@@ -33,7 +33,8 @@ export class VisualizationService {
     ipType: 'all',
     protocol: 'all',
     broadcast: false,
-    networkInterface: 'all'
+    networkInterface: 'all',
+    showLocalDevice: true
   };
 
   // Pan state
@@ -50,6 +51,8 @@ export class VisualizationService {
   private draggedDevice: Types.NetworkDevice | null = null;
   private deviceDragOffsetX: number = 0;
   private deviceDragOffsetY: number = 0;
+
+  private manuallyPositionedDevices: Set<string> = new Set<string>();
 
   // Zoom state
   private zoomScale: number = 1;
@@ -138,12 +141,13 @@ export class VisualizationService {
 
     window.addEventListener('mouseup', () => {
       if (this.isDraggingDevice) {
-        // Clear drag state but don't clear draggedDevice reference immediately
-        // This allows updateNetworkState to complete properly
+        if (this.draggedDevice) {
+          this.manuallyPositionedDevices.add(this.draggedDevice.id);
+        }
+
         this.isDraggingDevice = false;
         this.canvas.style.cursor = 'grab';
-        
-        // Small delay before clearing draggedDevice to handle any pending updates
+
         setTimeout(() => {
           this.draggedDevice = null;
         }, 50);
@@ -273,6 +277,10 @@ export class VisualizationService {
     this.canvas.addEventListener('touchend', (e) => {
       if (e.touches.length === 0) {
         if (this.isDraggingDevice) {
+          if (this.draggedDevice) {
+            this.manuallyPositionedDevices.add(this.draggedDevice.id);
+          }
+
           this.isDraggingDevice = false;
           this.canvas.style.cursor = 'grab';
           setTimeout(() => {
@@ -347,11 +355,13 @@ export class VisualizationService {
 
   updateNetworkState(devices: Types.NetworkDevice[], connections: Types.NetworkConnection[]): void {
     const newDevices = new Map<string, Types.NetworkDevice>();
-    
+    const currentDeviceIds = new Set<string>();
+
     devices.forEach(device => {
+      currentDeviceIds.add(device.id);
+
       const existingDevice = this.devices.get(device.id);
       if (existingDevice) {
-        // During active dragging, preserve dragged device position
         if (this.isDraggingDevice && this.draggedDevice && this.draggedDevice.id === device.id) {
           const updatedDevice = {
             ...device,
@@ -361,7 +371,6 @@ export class VisualizationService {
           newDevices.set(device.id, updatedDevice);
           this.draggedDevice = updatedDevice;
         } else {
-          // Preserve existing position for known devices
           newDevices.set(device.id, {
             ...device,
             x: existingDevice.x,
@@ -369,17 +378,21 @@ export class VisualizationService {
           });
         }
       } else {
-        // Position new devices
         this.positionNewDevice(device);
         newDevices.set(device.id, device);
       }
     });
 
-    // Resolve collisions for all devices (except the one being dragged)
+    for (const deviceId of this.manuallyPositionedDevices) {
+      if (!currentDeviceIds.has(deviceId)) {
+        this.manuallyPositionedDevices.delete(deviceId);
+      }
+    }
+
     const devicesToResolve = Array.from(newDevices.values()).filter(
       device => !(this.isDraggingDevice && this.draggedDevice && this.draggedDevice.id === device.id)
     );
-    
+
     if (devicesToResolve.length > 0) {
       this.resolveAllCollisions(devicesToResolve);
     }
@@ -542,7 +555,12 @@ export class VisualizationService {
   }
 
   private passesDeviceFilter(device: Types.NetworkDevice): boolean {
-    const { ip, ipType, broadcast } = this.filters;
+    const { ip, ipType, broadcast, showLocalDevice } = this.filters;
+
+    // Always show local device unless explicitly hidden
+    if (this.isMyDevice(device)) {
+      return showLocalDevice;
+    }
 
     if (ipType === 'local' && !this.isLocalIP(device.ip)) {
       return false;
@@ -768,8 +786,8 @@ export class VisualizationService {
   }
 
   private positionNewDevice(device: Types.NetworkDevice): void {
-    device.x = Math.random() * 2000;
-    device.y = Math.random() * 1500;
+    device.x = Math.random() * 1000;
+    device.y = Math.random() * 1000;
   }
 
   private resolveAllCollisions(devices: Types.NetworkDevice[]): void {
@@ -806,8 +824,10 @@ export class VisualizationService {
       if (!hasCollision) break;
 
       devices.forEach(device => {
-        device.x = Math.max(50, Math.min(1950, device.x));
-        device.y = Math.max(50, Math.min(1450, device.y));
+        if (!this.manuallyPositionedDevices.has(device.id)) {
+          device.x = Math.max(-1000, Math.min(1000, device.x));
+          device.y = Math.max(-1000, Math.min(1000, device.y));
+        }
       });
     }
   }
