@@ -14,7 +14,7 @@ PacketView is a full-stack application that captures network packets using `tcpd
 
 ## Features
 
-- **Real-time Packet Capture**: Capture packets from one or multiple network interfaces simultaneously
+ - **Real-time Packet Capture**: Capture packets from one or multiple network interfaces simultaneously
 - **2D Network Visualization**: Interactive visual representation of network topology with devices and connections
 - **Live Filtering**: Filter traffic by IP address, protocol (TCP, UDP, ICMP, HTTP, etc.), IP type (local/public), and interface
 - **Network Analysis**: Automatic device discovery and connection tracking
@@ -23,6 +23,7 @@ PacketView is a full-stack application that captures network packets using `tcpd
 - **Multi-interface Support**: Monitor multiple network interfaces at once
 - **Broadcast/Multicast Support**: Option to include or exclude broadcast/multicast traffic
 - **Responsive Design**: Clean and intuitive web interface
+- **Multi-Device Selection**: Select and drag multiple devices simultaneously for easier network layout management
 
 ## Architecture
 
@@ -149,10 +150,23 @@ The backend will serve the built frontend files and listen on port 3001.
    - **Protocol**: Filter by protocol (TCP, UDP, ICMP, HTTP, etc.)
    - **Interface**: Filter by specific network interface
    - **Broadcast/Multicast**: Include or exclude broadcast/multicast packets
-3. **Controls**:
-   - **Reset View**: Reset the visualization to default state
-   - **Enable/Disable Animations**: Toggle packet flow animations
-4. **Statistics Panel**: View real-time network statistics
+ 3. **Controls**:
+    - **Reset View**: Reset the visualization to default state
+    - **Enable/Disable Animations**: Toggle packet flow animations
+ 4. **Device Selection & Manipulation**:
+    - **Click**: Select a single device
+    - **Ctrl+Click**: Toggle device selection (add/remove from selection)
+    - **Ctrl+Drag**: Draw rectangle to select multiple devices
+    - **Drag**: Move selected devices (maintains relative positions)
+    - **Click empty space**: Clear selection
+    - **Escape**: Deselect all devices
+    - **Ctrl+A / Cmd+A**: Select all visible devices
+ 5. **Touchscreen Support**:
+    - **Tap**: Select a single device
+    - **Long-press (500ms) + Drag**: Draw rectangle to select multiple devices
+    - **Drag**: Move selected devices
+    - **Tap empty space**: Clear selection
+ 6. **Statistics Panel**: View real-time network statistics
 
 ## API Reference
 

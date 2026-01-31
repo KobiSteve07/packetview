@@ -46,11 +46,20 @@ export class VisualizationService {
   private dragStartOffsetX: number = 0;
   private dragStartOffsetY: number = 0;
 
-  // Device dragging state
   private isDraggingDevice: boolean = false;
   private draggedDevice: Types.NetworkDevice | null = null;
   private deviceDragOffsetX: number = 0;
   private deviceDragOffsetY: number = 0;
+
+  private selectedDevices: Set<string> = new Set<string>();
+  private isSelecting: boolean = false;
+  private selectionStart: { x: number; y: number } | null = null;
+  private selectionEnd: { x: number; y: number } | null = null;
+
+  private touchLongPressTimer: number | null = null;
+  private LONG_PRESS_THRESHOLD: number = 500;
+  private touchMoved: boolean = false;
+  private mouseMoved: boolean = false;
 
   private manuallyPositionedDevices: Set<string> = new Set<string>();
 
@@ -100,15 +109,35 @@ export class VisualizationService {
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        
+
+        this.mouseMoved = false;
+
         const clickedDevice = this.getDeviceAtPosition(x, y);
+
         if (clickedDevice) {
+          if (e.ctrlKey) {
+            if (this.selectedDevices.has(clickedDevice.id)) {
+              this.selectedDevices.delete(clickedDevice.id);
+            } else {
+              this.selectedDevices.add(clickedDevice.id);
+            }
+          } else if (!this.selectedDevices.has(clickedDevice.id)) {
+            this.selectedDevices.clear();
+            this.selectedDevices.add(clickedDevice.id);
+          }
+
           this.isDraggingDevice = true;
           this.draggedDevice = clickedDevice;
           const worldCoords = this.screenToWorld(x, y);
           this.deviceDragOffsetX = worldCoords.x - clickedDevice.x;
           this.deviceDragOffsetY = worldCoords.y - clickedDevice.y;
           this.canvas.style.cursor = 'move';
+        } else if (e.ctrlKey) {
+          this.isSelecting = true;
+          const worldCoords = this.screenToWorld(x, y);
+          this.selectionStart = worldCoords;
+          this.selectionEnd = worldCoords;
+          this.canvas.style.cursor = 'crosshair';
         } else {
           this.isDragging = true;
           this.dragStartX = e.clientX;
@@ -121,16 +150,39 @@ export class VisualizationService {
     });
 
     window.addEventListener('mousemove', (e) => {
+      if (this.isDraggingDevice || this.isDragging || this.isSelecting) {
+        this.mouseMoved = true;
+      }
+
       if (this.isDraggingDevice && this.draggedDevice) {
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         const worldCoords = this.screenToWorld(x, y);
-        
+
+        const dx = worldCoords.x - this.deviceDragOffsetX - this.draggedDevice.x;
+        const dy = worldCoords.y - this.deviceDragOffsetY - this.draggedDevice.y;
+
         this.draggedDevice.x = worldCoords.x - this.deviceDragOffsetX;
         this.draggedDevice.y = worldCoords.y - this.deviceDragOffsetY;
-        
+
+        for (const deviceId of this.selectedDevices) {
+          if (deviceId !== this.draggedDevice.id) {
+            const device = this.devices.get(deviceId);
+            if (device) {
+              device.x += dx;
+              device.y += dy;
+              this.notifyDevicePositionChanged(device);
+            }
+          }
+        }
+
         this.notifyDevicePositionChanged(this.draggedDevice);
+      } else if (this.isSelecting && this.selectionStart) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        this.selectionEnd = this.screenToWorld(x, y);
       } else if (this.isDragging) {
         const dx = e.clientX - this.dragStartX;
         const dy = e.clientY - this.dragStartY;
@@ -141,19 +193,44 @@ export class VisualizationService {
 
     window.addEventListener('mouseup', () => {
       if (this.isDraggingDevice) {
-        if (this.draggedDevice) {
-          this.manuallyPositionedDevices.add(this.draggedDevice.id);
+        for (const deviceId of this.selectedDevices) {
+          const device = this.devices.get(deviceId);
+          if (device) {
+            this.manuallyPositionedDevices.add(device.id);
+          }
         }
 
         this.isDraggingDevice = false;
         this.canvas.style.cursor = 'grab';
-
         setTimeout(() => {
           this.draggedDevice = null;
         }, 50);
+      } else if (this.isSelecting) {
+        this.finalizeSelection();
+        this.isSelecting = false;
+        this.selectionStart = null;
+        this.selectionEnd = null;
+        this.canvas.style.cursor = 'grab';
       } else if (this.isDragging) {
+        if (!this.mouseMoved) {
+          this.selectedDevices.clear();
+        }
         this.isDragging = false;
         this.canvas.style.cursor = 'grab';
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.selectedDevices.clear();
+      } else if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.selectedDevices.clear();
+        for (const device of this.devices.values()) {
+          if (this.passesDeviceFilter(device)) {
+            this.selectedDevices.add(device.id);
+          }
+        }
       }
     });
 
@@ -181,7 +258,6 @@ export class VisualizationService {
       this.zoomScale = newZoomScale;
     }, { passive: false });
 
-    // Touch start handler
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const rect = this.canvas.getBoundingClientRect();
@@ -191,8 +267,24 @@ export class VisualizationService {
         const x = touch.clientX - rect.left;
         const y = touch.clientY - rect.top;
 
+        this.touchMoved = false;
+
+        this.touchLongPressTimer = window.setTimeout(() => {
+          this.selectedDevices.clear();
+          const worldCoords = this.screenToWorld(x, y);
+          this.isSelecting = true;
+          this.isDragging = false;
+          this.selectionStart = worldCoords;
+          this.selectionEnd = worldCoords;
+          this.canvas.style.cursor = 'crosshair';
+        }, this.LONG_PRESS_THRESHOLD);
+
         const clickedDevice = this.getDeviceAtPosition(x, y);
         if (clickedDevice) {
+          if (!this.selectedDevices.has(clickedDevice.id)) {
+            this.selectedDevices.clear();
+            this.selectedDevices.add(clickedDevice.id);
+          }
           this.isDraggingDevice = true;
           this.draggedDevice = clickedDevice;
           const worldCoords = this.screenToWorld(x, y);
@@ -211,6 +303,11 @@ export class VisualizationService {
         this.isPinching = true;
         this.isDragging = false;
         this.isDraggingDevice = false;
+
+        if (this.touchLongPressTimer) {
+          clearTimeout(this.touchLongPressTimer);
+          this.touchLongPressTimer = null;
+        }
 
         const touch1 = e.touches[0];
         const touch2 = e.touches[1];
@@ -231,19 +328,44 @@ export class VisualizationService {
       }
     }, { passive: false });
 
-    // Touch move handler
     this.canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
       const rect = this.canvas.getBoundingClientRect();
 
-      if (this.isDraggingDevice && this.draggedDevice && e.touches.length === 1) {
+      if (this.touchLongPressTimer) {
+        clearTimeout(this.touchLongPressTimer);
+        this.touchLongPressTimer = null;
+      }
+
+      this.touchMoved = true;
+
+      if (this.isSelecting && this.selectionStart && e.touches.length === 1) {
+        const touch = e.touches[0];
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        this.selectionEnd = this.screenToWorld(x, y);
+      } else if (this.isDraggingDevice && this.draggedDevice && e.touches.length === 1) {
         const touch = e.touches[0];
         const x = touch.clientX - rect.left;
         const y = touch.clientY - rect.top;
         const worldCoords = this.screenToWorld(x, y);
 
+        const dx = worldCoords.x - this.deviceDragOffsetX - this.draggedDevice.x;
+        const dy = worldCoords.y - this.deviceDragOffsetY - this.draggedDevice.y;
+
         this.draggedDevice.x = worldCoords.x - this.deviceDragOffsetX;
         this.draggedDevice.y = worldCoords.y - this.deviceDragOffsetY;
+
+        for (const deviceId of this.selectedDevices) {
+          if (deviceId !== this.draggedDevice.id) {
+            const device = this.devices.get(deviceId);
+            if (device) {
+              device.x += dx;
+              device.y += dy;
+              this.notifyDevicePositionChanged(device);
+            }
+          }
+        }
 
         this.notifyDevicePositionChanged(this.draggedDevice);
       } else if (this.isDragging && e.touches.length === 1) {
@@ -273,12 +395,19 @@ export class VisualizationService {
       }
     }, { passive: false });
 
-    // Touch end handler
     this.canvas.addEventListener('touchend', (e) => {
+      if (this.touchLongPressTimer) {
+        clearTimeout(this.touchLongPressTimer);
+        this.touchLongPressTimer = null;
+      }
+
       if (e.touches.length === 0) {
         if (this.isDraggingDevice) {
-          if (this.draggedDevice) {
-            this.manuallyPositionedDevices.add(this.draggedDevice.id);
+          for (const deviceId of this.selectedDevices) {
+            const device = this.devices.get(deviceId);
+            if (device) {
+              this.manuallyPositionedDevices.add(device.id);
+            }
           }
 
           this.isDraggingDevice = false;
@@ -286,7 +415,17 @@ export class VisualizationService {
           setTimeout(() => {
             this.draggedDevice = null;
           }, 50);
+        } else if (this.isSelecting) {
+          this.finalizeSelection();
+          this.isSelecting = false;
+          this.isDragging = false;
+          this.selectionStart = null;
+          this.selectionEnd = null;
+          this.canvas.style.cursor = 'grab';
         } else if (this.isDragging) {
+          if (!this.touchMoved) {
+            this.selectedDevices.clear();
+          }
           this.isDragging = false;
           this.canvas.style.cursor = 'grab';
         } else if (this.isPinching) {
@@ -294,6 +433,8 @@ export class VisualizationService {
           this.initialPinchCenter = null;
           this.initialPinchWorldCenter = null;
           this.canvas.style.cursor = 'grab';
+        } else if (!this.touchMoved && !this.isSelecting) {
+          this.selectedDevices.clear();
         }
       } else if (e.touches.length === 1 && this.isPinching) {
         this.isPinching = false;
@@ -307,6 +448,10 @@ export class VisualizationService {
 
         const clickedDevice = this.getDeviceAtPosition(x, y);
         if (clickedDevice) {
+          if (!this.selectedDevices.has(clickedDevice.id)) {
+            this.selectedDevices.clear();
+            this.selectedDevices.add(clickedDevice.id);
+          }
           this.isDraggingDevice = true;
           this.draggedDevice = clickedDevice;
           const worldCoords = this.screenToWorld(x, y);
@@ -431,6 +576,8 @@ export class VisualizationService {
     this.drawConnections();
     this.drawPackets();
     this.drawDevices();
+    this.drawSelection();
+    this.drawSelectionRectangle();
 
     this.ctx.restore();
 
@@ -638,6 +785,7 @@ export class VisualizationService {
     const radius = baseRadius + trafficBonus;
     const isMyDevice = this.isMyDevice(device);
     const isBeingDragged = this.isDraggingDevice && this.draggedDevice === device;
+    const isSelected = this.selectedDevices.has(device.id);
 
     if (isMyDevice) {
       const pulseIntensity = (Math.sin(Date.now() / 500) + 1) / 2;
@@ -694,6 +842,22 @@ export class VisualizationService {
       this.ctx.beginPath();
       this.ctx.arc(device.x, device.y, radius + 5, 0, Math.PI * 2);
       this.ctx.stroke();
+    }
+
+    if (isSelected && !isBeingDragged) {
+      this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.9)';
+      this.ctx.lineWidth = 3;
+      this.ctx.beginPath();
+      this.ctx.arc(device.x, device.y, radius + 4, 0, Math.PI * 2);
+      this.ctx.stroke();
+
+      this.ctx.setLineDash([5, 5]);
+      this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.5)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.arc(device.x, device.y, radius + 8, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
     }
 
     this.ctx.fillStyle = '#ffffff';
@@ -842,5 +1006,70 @@ export class VisualizationService {
     const dx = x2 - x1;
     const dy = y2 - y1;
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private finalizeSelection(): void {
+    if (!this.selectionStart || !this.selectionEnd) {
+      return;
+    }
+
+    const x1 = Math.min(this.selectionStart.x, this.selectionEnd.x);
+    const y1 = Math.min(this.selectionStart.y, this.selectionEnd.y);
+    const x2 = Math.max(this.selectionStart.x, this.selectionEnd.x);
+    const y2 = Math.max(this.selectionStart.y, this.selectionEnd.y);
+
+    for (const device of this.devices.values()) {
+      if (device.x >= x1 && device.x <= x2 && device.y >= y1 && device.y <= y2) {
+        this.selectedDevices.add(device.id);
+      }
+    }
+  }
+
+  private drawSelection(): void {
+    for (const deviceId of this.selectedDevices) {
+      const device = this.devices.get(deviceId);
+      if (!device) continue;
+
+      const isBeingDragged = this.isDraggingDevice && this.draggedDevice === device;
+      if (isBeingDragged) continue;
+
+      const baseRadius = 25;
+      const trafficBonus = Math.min((device.trafficIn + device.trafficOut) / 10000, 15);
+      const radius = baseRadius + trafficBonus;
+
+      this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.9)';
+      this.ctx.lineWidth = 3;
+      this.ctx.beginPath();
+      this.ctx.arc(device.x, device.y, radius + 4, 0, Math.PI * 2);
+      this.ctx.stroke();
+
+      this.ctx.setLineDash([5, 5]);
+      this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.5)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.arc(device.x, device.y, radius + 8, 0, Math.PI * 2);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+    }
+  }
+
+  private drawSelectionRectangle(): void {
+    if (!this.isSelecting || !this.selectionStart || !this.selectionEnd) {
+      return;
+    }
+
+    const x = Math.min(this.selectionStart.x, this.selectionEnd.x);
+    const y = Math.min(this.selectionStart.y, this.selectionEnd.y);
+    const width = Math.abs(this.selectionEnd.x - this.selectionStart.x);
+    const height = Math.abs(this.selectionEnd.y - this.selectionStart.y);
+
+    this.ctx.strokeStyle = 'rgba(100, 200, 255, 0.8)';
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([5, 5]);
+    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.setLineDash([]);
+
+    this.ctx.fillStyle = 'rgba(100, 200, 255, 0.1)';
+    this.ctx.fillRect(x, y, width, height);
   }
 }
