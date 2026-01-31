@@ -535,7 +535,8 @@ export class VisualizationService {
     }
 
     const devicesToResolve = Array.from(newDevices.values()).filter(
-      device => !(this.isDraggingDevice && this.draggedDevice && this.draggedDevice.id === device.id)
+      device => !(this.isDraggingDevice && this.selectedDevices.has(device.id)) &&
+               this.passesDeviceFilter(device)
     );
 
     if (devicesToResolve.length > 0) {
@@ -730,6 +731,13 @@ export class VisualizationService {
 
   setFilters(filters: Partial<Types.FilterOptions>): void {
     this.filters = { ...this.filters, ...filters };
+
+    for (const deviceId of this.selectedDevices) {
+      const device = this.devices.get(deviceId);
+      if (device && !this.passesDeviceFilter(device)) {
+        this.selectedDevices.delete(deviceId);
+      }
+    }
   }
 
   getFilters(): Types.FilterOptions {
