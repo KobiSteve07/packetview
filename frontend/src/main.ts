@@ -1,5 +1,6 @@
 import { WebSocketService } from './services/api';
 import { VisualizationService } from './services/visualization';
+import { colorManager } from './services/ColorManager';
 import * as Types from './shared/types';
 import './styles/global.css';
 
@@ -9,6 +10,7 @@ export class PacketViewApp {
   private interfaces: Types.InterfaceInfo[] = [];
   private totalPackets: number = 0;
   private totalTraffic: number = 0;
+  private colorPanelVisible: boolean = false;
 
   constructor() {
     this.wsService = new WebSocketService('');
@@ -24,10 +26,12 @@ export class PacketViewApp {
     const controlPanel = this.createControlPanel();
     const statsPanel = this.createStatsPanel();
     const deviceTooltip = this.createDeviceTooltip();
+    const colorPanel = this.createColorManagerPanel();
 
     document.body.appendChild(controlPanel);
     document.body.appendChild(statsPanel);
     document.body.appendChild(deviceTooltip);
+    document.body.appendChild(colorPanel);
 
     this.setupWebSocketHandlers();
     this.setupEventListeners();
@@ -91,9 +95,10 @@ export class PacketViewApp {
             Show Scanning Device
           </label>
         </div>
-      </div>
+       </div>
        <button id="reset-view-btn">Reset View</button>
        <button id="toggle-animations-btn">Disable Animations</button>
+       <button id="color-manager-btn">Color Manager</button>
        <div class="status active" id="status-panel">
          Status: <span id="status-text">Capturing</span>
        </div>
@@ -133,6 +138,214 @@ export class PacketViewApp {
     return tooltip;
   }
 
+  private createColorManagerPanel(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.className = 'color-manager-panel';
+    panel.style.display = this.colorPanelVisible ? 'block' : 'none';
+
+    panel.innerHTML = `
+      <div class="color-manager-header">
+        <h3>Color Manager</h3>
+        <button id="close-color-panel" class="close-button">×</button>
+      </div>
+      <div class="color-manager-content">
+        <div class="color-section">
+          <h4>Protocol Colors</h4>
+          <div class="color-row">
+            <label for="tcp-color">TCP</label>
+            <input type="color" id="tcp-color" value="${colorManager.getProtocolColor(Types.Protocol.TCP)}" />
+            <button class="reset-color-btn" data-protocol="TCP">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="udp-color">UDP</label>
+            <input type="color" id="udp-color" value="${colorManager.getProtocolColor(Types.Protocol.UDP)}" />
+            <button class="reset-color-btn" data-protocol="UDP">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="icmp-color">ICMP</label>
+            <input type="color" id="icmp-color" value="${colorManager.getProtocolColor(Types.Protocol.ICMP)}" />
+            <button class="reset-color-btn" data-protocol="ICMP">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="http-color">HTTP</label>
+            <input type="color" id="http-color" value="${colorManager.getProtocolColor(Types.Protocol.HTTP)}" />
+            <button class="reset-color-btn" data-protocol="HTTP">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="https-color">HTTPS</label>
+            <input type="color" id="https-color" value="${colorManager.getProtocolColor(Types.Protocol.HTTPS)}" />
+            <button class="reset-color-btn" data-protocol="HTTPS">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="dns-color">DNS</label>
+            <input type="color" id="dns-color" value="${colorManager.getProtocolColor(Types.Protocol.DNS)}" />
+            <button class="reset-color-btn" data-protocol="DNS">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="ssh-color">SSH</label>
+            <input type="color" id="ssh-color" value="${colorManager.getProtocolColor(Types.Protocol.SSH)}" />
+            <button class="reset-color-btn" data-protocol="SSH">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="ftp-color">FTP</label>
+            <input type="color" id="ftp-color" value="${colorManager.getProtocolColor(Types.Protocol.FTP)}" />
+            <button class="reset-color-btn" data-protocol="FTP">Reset</button>
+          </div>
+          <div class="color-row">
+            <label for="smtp-color">SMTP</label>
+            <input type="color" id="smtp-color" value="${colorManager.getProtocolColor(Types.Protocol.SMTP)}" />
+            <button class="reset-color-btn" data-protocol="SMTP">Reset</button>
+          </div>
+        </div>
+        <div class="color-section">
+          <h4>Device Colors</h4>
+          <div class="device-color-group">
+            <label>My Device</label>
+            <div class="gradient-color-row">
+              <input type="color" id="my-device-start" value="${colorManager.getMyDeviceColors().start}" />
+              <span>→</span>
+              <input type="color" id="my-device-end" value="${colorManager.getMyDeviceColors().end}" />
+            </div>
+          </div>
+          <div class="device-color-group">
+            <label>Local Device</label>
+            <div class="gradient-color-row">
+              <input type="color" id="local-device-start" value="${colorManager.getLocalDeviceColors().start}" />
+              <span>→</span>
+              <input type="color" id="local-device-end" value="${colorManager.getLocalDeviceColors().end}" />
+            </div>
+          </div>
+          <div class="device-color-group">
+            <label>Public Device</label>
+            <div class="gradient-color-row">
+              <input type="color" id="public-device-start" value="${colorManager.getPublicDeviceColors().start}" />
+              <span>→</span>
+              <input type="color" id="public-device-end" value="${colorManager.getPublicDeviceColors().end}" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="color-manager-footer">
+        <button id="reset-all-colors" class="reset-all-btn">Reset All to Defaults</button>
+      </div>
+    `;
+
+    this.setupColorManagerListeners(panel);
+    return panel;
+  }
+
+  private setupColorManagerListeners(panel: HTMLElement): void {
+    const closeBtn = panel.querySelector('#close-color-panel') as HTMLButtonElement;
+    closeBtn?.addEventListener('click', () => {
+      this.colorPanelVisible = false;
+      panel.style.display = 'none';
+    });
+
+    panel.querySelectorAll('input[id$="-color"]').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        const protocolStr = target.id.replace('-color', '').toUpperCase();
+        const protocol = Object.values(Types.Protocol).find(p => p === protocolStr);
+        if (protocol) {
+          colorManager.setProtocolColor(protocol, target.value);
+        }
+      });
+    });
+
+    panel.querySelectorAll('.reset-color-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn as HTMLButtonElement;
+        const protocolStr = target.dataset.protocol?.toUpperCase();
+        const protocol = Object.values(Types.Protocol).find(p => p === protocolStr);
+        const defaultColor = protocol ? this.getDefaultProtocolColor(protocol) : undefined;
+        if (defaultColor && protocol) {
+          colorManager.setProtocolColor(protocol, defaultColor);
+          const input = panel.querySelector(`#${protocol.toLowerCase()}-color`) as HTMLInputElement;
+          if (input) input.value = defaultColor;
+        }
+      });
+    });
+
+    const myDeviceStart = panel.querySelector('#my-device-start') as HTMLInputElement;
+    const myDeviceEnd = panel.querySelector('#my-device-end') as HTMLInputElement;
+    myDeviceStart?.addEventListener('input', (e) => {
+      colorManager.setMyDeviceColor((e.target as HTMLInputElement).value, myDeviceEnd.value);
+    });
+    myDeviceEnd?.addEventListener('input', (e) => {
+      colorManager.setMyDeviceColor(myDeviceStart.value, (e.target as HTMLInputElement).value);
+    });
+
+    const localDeviceStart = panel.querySelector('#local-device-start') as HTMLInputElement;
+    const localDeviceEnd = panel.querySelector('#local-device-end') as HTMLInputElement;
+    localDeviceStart?.addEventListener('input', (e) => {
+      colorManager.setLocalDeviceColor((e.target as HTMLInputElement).value, localDeviceEnd.value);
+    });
+    localDeviceEnd?.addEventListener('input', (e) => {
+      colorManager.setLocalDeviceColor(localDeviceStart.value, (e.target as HTMLInputElement).value);
+    });
+
+    const publicDeviceStart = panel.querySelector('#public-device-start') as HTMLInputElement;
+    const publicDeviceEnd = panel.querySelector('#public-device-end') as HTMLInputElement;
+    publicDeviceStart?.addEventListener('input', (e) => {
+      colorManager.setPublicDeviceColor((e.target as HTMLInputElement).value, publicDeviceEnd.value);
+    });
+    publicDeviceEnd?.addEventListener('input', (e) => {
+      colorManager.setPublicDeviceColor(publicDeviceStart.value, (e.target as HTMLInputElement).value);
+    });
+
+    const resetAllBtn = panel.querySelector('#reset-all-colors') as HTMLButtonElement;
+    resetAllBtn?.addEventListener('click', () => {
+      console.log('Reset all colors button clicked');
+      colorManager.resetToDefaults();
+      this.updateColorManagerUI();
+    });
+  }
+
+  private getDefaultProtocolColor(protocol: Types.Protocol): string | undefined {
+    const defaults: Record<string, string> = {
+      'TCP': '#4a9eff',
+      'UDP': '#9eff4a',
+      'ICMP': '#ff4a4a',
+      'HTTP': '#ff9e4a',
+      'HTTPS': '#4aff9e',
+      'DNS': '#ff4a9e',
+      'SSH': '#9e4aff',
+      'FTP': '#4a9eff',
+      'SMTP': '#ff9e4a',
+      'OTHER': '#888888'
+    };
+    return defaults[protocol];
+  }
+
+  private updateColorManagerUI(): void {
+    const panel = document.querySelector('.color-manager-panel') as HTMLElement;
+    if (!panel) return;
+
+    const protocolStrings = ['TCP', 'UDP', 'ICMP', 'HTTP', 'HTTPS', 'DNS', 'SSH', 'FTP', 'SMTP'];
+    protocolStrings.forEach(protocolStr => {
+      const protocol = Object.values(Types.Protocol).find(p => p === protocolStr);
+      if (protocol) {
+        const input = panel.querySelector(`#${protocolStr.toLowerCase()}-color`) as HTMLInputElement;
+        if (input) input.value = colorManager.getProtocolColor(protocol);
+      }
+    });
+
+    const myDeviceStart = panel.querySelector('#my-device-start') as HTMLInputElement;
+    const myDeviceEnd = panel.querySelector('#my-device-end') as HTMLInputElement;
+    if (myDeviceStart) myDeviceStart.value = colorManager.getMyDeviceColors().start;
+    if (myDeviceEnd) myDeviceEnd.value = colorManager.getMyDeviceColors().end;
+
+    const localDeviceStart = panel.querySelector('#local-device-start') as HTMLInputElement;
+    const localDeviceEnd = panel.querySelector('#local-device-end') as HTMLInputElement;
+    if (localDeviceStart) localDeviceStart.value = colorManager.getLocalDeviceColors().start;
+    if (localDeviceEnd) localDeviceEnd.value = colorManager.getLocalDeviceColors().end;
+
+    const publicDeviceStart = panel.querySelector('#public-device-start') as HTMLInputElement;
+    const publicDeviceEnd = panel.querySelector('#public-device-end') as HTMLInputElement;
+    if (publicDeviceStart) publicDeviceStart.value = colorManager.getPublicDeviceColors().start;
+    if (publicDeviceEnd) publicDeviceEnd.value = colorManager.getPublicDeviceColors().end;
+  }
+
   private setupEventListeners(): void {
     const resetViewBtn = document.getElementById('reset-view-btn') as HTMLButtonElement;
     const ipFilterInput = document.getElementById('ip-filter') as HTMLInputElement;
@@ -165,6 +378,14 @@ export class PacketViewApp {
       const isEnabled = this.vizService.togglePacketAnimations();
       const btn = document.getElementById('toggle-animations-btn') as HTMLButtonElement;
       btn.textContent = isEnabled ? 'Disable Animations' : 'Enable Animations';
+    });
+
+    document.getElementById('color-manager-btn')?.addEventListener('click', () => {
+      const colorPanel = document.querySelector('.color-manager-panel') as HTMLElement;
+      if (colorPanel) {
+        this.colorPanelVisible = !this.colorPanelVisible;
+        colorPanel.style.display = this.colorPanelVisible ? 'block' : 'none';
+      }
     });
 
     document.addEventListener('mousemove', () => this.handleMouseMove());

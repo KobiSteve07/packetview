@@ -24,6 +24,8 @@ PacketView is a full-stack application that captures network packets using `tcpd
 - **Broadcast/Multicast Support**: Option to include or exclude broadcast/multicast traffic
 - **Responsive Design**: Clean and intuitive web interface
 - **Multi-Device Selection**: Select and drag multiple devices simultaneously for easier network layout management
+- **Customizable Color Scheme**: Personalize protocol and device colors with an intuitive color manager
+- **Persistent Color Preferences**: Your color settings are saved locally and persist across browser sessions
 
 ## Architecture
 
@@ -50,6 +52,8 @@ PacketView/
 - **NetworkAnalysisService**: Analyzes packets to build network state (devices, connections, flows)
 - **Frontend**: Vite-powered SPA with HTML5 Canvas for 2D visualization
 - **VisualizationService**: Renders network topology and packet animations
+- **ColorManager**: Manages color preferences with localStorage persistence
+
 
 ## Prerequisites
 
@@ -150,23 +154,31 @@ The backend will serve the built frontend files and listen on port 3001.
    - **Protocol**: Filter by protocol (TCP, UDP, ICMP, HTTP, etc.)
    - **Interface**: Filter by specific network interface
    - **Broadcast/Multicast**: Include or exclude broadcast/multicast packets
- 3. **Controls**:
-    - **Reset View**: Reset the visualization to default state
-    - **Enable/Disable Animations**: Toggle packet flow animations
- 4. **Device Selection & Manipulation**:
-    - **Click**: Select a single device
-    - **Ctrl+Click**: Toggle device selection (add/remove from selection)
-    - **Ctrl+Drag**: Draw rectangle to select multiple devices
-    - **Drag**: Move selected devices (maintains relative positions)
-    - **Click empty space**: Clear selection
-    - **Escape**: Deselect all devices
-    - **Ctrl+A / Cmd+A**: Select all visible devices
- 5. **Touchscreen Support**:
-    - **Tap**: Select a single device
-    - **Long-press (500ms) + Drag**: Draw rectangle to select multiple devices
-    - **Drag**: Move selected devices
-    - **Tap empty space**: Clear selection
- 6. **Statistics Panel**: View real-time network statistics
+3. **Controls**:
+   - **Reset View**: Reset the visualization to default state
+   - **Enable/Disable Animations**: Toggle packet flow animations
+   - **Color Manager**: Open the color customization panel
+4. **Color Manager**:
+   - **Protocol Colors**: Customize colors for each protocol (TCP, UDP, ICMP, HTTP, HTTPS, DNS, SSH, FTP, SMTP)
+   - **Device Colors**: Customize gradient colors for My Device, Local Devices, and Public Devices
+   - **Individual Reset**: Reset each protocol to its default color
+   - **Reset All**: Restore all colors to their default values
+   - **Live Preview**: Changes are immediately reflected in the visualization
+   - **Persistent Settings**: Color preferences are saved to localStorage and persist across sessions
+5. **Device Selection & Manipulation**:
+   - **Click**: Select a single device
+   - **Ctrl+Click**: Toggle device selection (add/remove from selection)
+   - **Ctrl+Drag**: Draw rectangle to select multiple devices
+   - **Drag**: Move selected devices (maintains relative positions)
+   - **Click empty space**: Clear selection
+   - **Escape**: Deselect all devices
+   - **Ctrl+A / Cmd+A**: Select all visible devices
+6. **Touchscreen Support**:
+   - **Tap**: Select a single device
+   - **Long-press (500ms) + Drag**: Draw rectangle to select multiple devices
+   - **Drag**: Move selected devices
+   - **Tap empty space**: Clear selection
+7. **Statistics Panel**: View real-time network statistics
 
 ## API Reference
 

@@ -1,17 +1,5 @@
 import * as Types from '../../../shared/types';
-
-const PROTOCOL_COLORS: Record<Types.Protocol, string> = {
-  'TCP': '#4a9eff',
-  'UDP': '#9eff4a',
-  'ICMP': '#ff4a4a',
-  'HTTP': '#ff9e4a',
-  'HTTPS': '#4aff9e',
-  'DNS': '#ff4a9e',
-  'SSH': '#9e4aff',
-  'FTP': '#4a9eff',
-  'SMTP': '#ff9e4a',
-  'OTHER': '#888888'
-};
+import { colorManager } from './ColorManager';
 
 export interface PacketAnimation {
   connectionId: string;
@@ -645,7 +633,7 @@ export class VisualizationService {
       const x = sourceDevice.x + (destDevice.x - sourceDevice.x) * anim.progress;
       const y = sourceDevice.y + (destDevice.y - sourceDevice.y) * anim.progress;
 
-      const color = PROTOCOL_COLORS[anim.protocol] || PROTOCOL_COLORS.OTHER;
+      const color = colorManager.getProtocolColor(anim.protocol);
 
       this.ctx.beginPath();
       this.ctx.arc(x, y, 5, 0, Math.PI * 2);
@@ -686,7 +674,7 @@ export class VisualizationService {
         this.ctx.moveTo(sourceDevice.x, sourceDevice.y);
         this.ctx.lineTo(destDevice.x, destDevice.y);
 
-        const color = PROTOCOL_COLORS[connection.protocol] || PROTOCOL_COLORS.OTHER;
+        const color = colorManager.getProtocolColor(connection.protocol);
         this.ctx.strokeStyle = color;
         this.ctx.lineWidth = Math.min(connection.traffic / 1000 + 1, 5);
         this.ctx.stroke();
@@ -799,13 +787,14 @@ export class VisualizationService {
       const pulseIntensity = (Math.sin(Date.now() / 500) + 1) / 2;
       const glowRadius = radius + 10 + pulseIntensity * 15;
 
+      const myDeviceColors = colorManager.getMyDeviceColors();
       const glowGradient = this.ctx.createRadialGradient(
         device.x, device.y, radius,
         device.x, device.y, glowRadius
       );
-      glowGradient.addColorStop(0, `rgba(100, 255, 150, ${0.4 + pulseIntensity * 0.3})`);
-      glowGradient.addColorStop(0.5, `rgba(100, 255, 150, ${0.2 + pulseIntensity * 0.15})`);
-      glowGradient.addColorStop(1, 'rgba(100, 255, 150, 0)');
+      glowGradient.addColorStop(0, `${myDeviceColors.glow} ${0.4 + pulseIntensity * 0.3})`);
+      glowGradient.addColorStop(0.5, `${myDeviceColors.glow} ${0.2 + pulseIntensity * 0.15})`);
+      glowGradient.addColorStop(1, `${myDeviceColors.glow} 0)`);
 
       this.ctx.beginPath();
       this.ctx.arc(device.x, device.y, glowRadius, 0, Math.PI * 2);
@@ -823,14 +812,17 @@ export class VisualizationService {
 
     const isLocal = this.isLocalIP(device.ip);
     if (isMyDevice) {
-      gradient.addColorStop(0, '#64ff96');
-      gradient.addColorStop(1, '#2a8a4a');
+      const myDeviceColors = colorManager.getMyDeviceColors();
+      gradient.addColorStop(0, myDeviceColors.start);
+      gradient.addColorStop(1, myDeviceColors.end);
     } else if (isLocal) {
-      gradient.addColorStop(0, '#4a9eff');
-      gradient.addColorStop(1, '#2a2a8a');
+      const localDeviceColors = colorManager.getLocalDeviceColors();
+      gradient.addColorStop(0, localDeviceColors.start);
+      gradient.addColorStop(1, localDeviceColors.end);
     } else {
-      gradient.addColorStop(0, '#ff9e4a');
-      gradient.addColorStop(1, '#8a2a2a');
+      const publicDeviceColors = colorManager.getPublicDeviceColors();
+      gradient.addColorStop(0, publicDeviceColors.start);
+      gradient.addColorStop(1, publicDeviceColors.end);
     }
 
     this.ctx.fillStyle = gradient;
