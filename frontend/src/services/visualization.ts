@@ -893,6 +893,10 @@ export class VisualizationService {
     const worldY = (y - this.panOffsetY) / this.zoomScale;
 
     for (const device of this.devices.values()) {
+      if (!this.passesDeviceFilter(device)) {
+        continue;
+      }
+
       const dx = worldX - device.x;
       const dy = worldY - device.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
