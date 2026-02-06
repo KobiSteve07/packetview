@@ -307,7 +307,6 @@ body {
   cursor: not-allowed;
 }
 
-/* Color Manager Panel Styles */
 .color-manager-panel {
   position: fixed;
   top: 20px;
@@ -321,6 +320,14 @@ body {
   overflow-y: auto;
   z-index: 1002;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.color-manager-panel.visible {
+  opacity: 1;
+  visibility: visible;
 }
 
 .color-manager-header {
@@ -472,4 +479,159 @@ body {
 
 .color-manager-footer .reset-all-btn:hover {
   background-color: #d32f2f;
+}
+
+.device-properties-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(26, 26, 26, 0.95);
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 20px;
+  min-width: 280px;
+  max-height: 80vh;
+  overflow-y: auto;
+  z-index: 1002;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease, right 0.3s ease;
+}
+
+.device-properties-panel.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.device-properties-panel.shifted {
+  right: 360px;
+}
+
+.device-properties-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #444;
+}
+
+.device-properties-header h3 {
+  font-size: 16px;
+  color: #4a9eff;
+  margin: 0;
+}
+
+.device-properties-header .close-button {
+  background: none;
+  border: none;
+  color: #a0a0a0;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: auto;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.device-properties-header .close-button:hover {
+  color: #e0e0e0;
+}
+
+.device-properties-content {
+  max-height: calc(80vh - 100px);
+  overflow-y: auto;
+}
+
+.device-properties-summary {
+  margin-bottom: 15px;
+}
+
+.property-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 8px;
+  background-color: rgba(42, 42, 42, 0.5);
+  border-radius: 4px;
+}
+
+.property-label {
+  font-size: 13px;
+  color: #a0a0a0;
+}
+
+.property-value {
+  font-size: 13px;
+  color: #e0e0e0;
+  font-weight: bold;
+}
+
+.device-types-section {
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(42, 42, 42, 0.3);
+  border-radius: 6px;
+  border: 1px solid #444;
+}
+
+.device-types-section h4 {
+  font-size: 13px;
+  color: #e0e0e0;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #444;
+}
+
+.device-type-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.device-type-name {
+  color: #a0a0a0;
+  text-transform: capitalize;
+}
+
+.device-type-count {
+  color: #e0e0e0;
+  font-weight: bold;
+}
+
+.selected-devices-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: rgba(42, 42, 42, 0.3);
+  padding: 10px;
+}
+
+.selected-device-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px;
+  margin-bottom: 4px;
+  background-color: rgba(74, 158, 255, 0.1);
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.selected-device-item:last-child {
+  margin-bottom: 0;
+}
+
+.selected-device-item .device-ip {
+  color: #4a9eff;
+  font-weight: bold;
+}
+
+.selected-device-item .device-traffic {
+  color: #a0a0a0;
 }
