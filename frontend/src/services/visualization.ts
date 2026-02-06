@@ -1012,6 +1012,82 @@ export class VisualizationService {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  getSelectedDevices(): Types.NetworkDevice[] {
+    const selected: Types.NetworkDevice[] = [];
+    for (const deviceId of this.selectedDevices) {
+      const device = this.devices.get(deviceId);
+      if (device) {
+        selected.push(device);
+      }
+    }
+    return selected;
+  }
+
+  getSelectedDevicesCount(): number {
+    return this.selectedDevices.size;
+  }
+
+  isDeviceSelected(deviceId: string): boolean {
+    return this.selectedDevices.has(deviceId);
+  }
+
+  getSelectedDevicesStats(): {
+    count: number;
+    totalTrafficIn: number;
+    totalTrafficOut: number;
+    totalTraffic: number;
+    localDevices: number;
+    publicDevices: number;
+    myDevice: boolean;
+    deviceTypes: Record<string, number>;
+  } {
+    const selected = this.getSelectedDevices();
+    let totalTrafficIn = 0;
+    let totalTrafficOut = 0;
+    let localDevices = 0;
+    let publicDevices = 0;
+    let myDevice = false;
+    const deviceTypes: Record<string, number> = {};
+
+    for (const device of selected) {
+      totalTrafficIn += device.trafficIn;
+      totalTrafficOut += device.trafficOut;
+
+      if (this.isMyDevice(device)) {
+        myDevice = true;
+      }
+
+      if (this.isLocalIP(device.ip)) {
+        localDevices++;
+      } else {
+        publicDevices++;
+      }
+
+      deviceTypes[device.type] = (deviceTypes[device.type] || 0) + 1;
+    }
+
+    return {
+      count: selected.length,
+      totalTrafficIn,
+      totalTrafficOut,
+      totalTraffic: totalTrafficIn + totalTrafficOut,
+      localDevices,
+      publicDevices,
+      myDevice,
+      deviceTypes
+    };
+  }
+
+  onSelectionChange(callback: () => void): void {
+    const originalMouseUp = window.onmouseup;
+    window.addEventListener('mouseup', () => {
+      callback();
+      if (originalMouseUp) {
+        originalMouseUp.call(window, new MouseEvent('mouseup'));
+      }
+    });
+  }
+
   private finalizeSelection(): void {
     if (!this.selectionStart || !this.selectionEnd) {
       return;
