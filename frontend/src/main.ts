@@ -7,31 +7,37 @@ import './styles/global.css';
 export class PacketViewApp {
   private wsService: WebSocketService;
   private vizService: VisualizationService;
+  private canvas: HTMLCanvasElement;
   private interfaces: Types.InterfaceInfo[] = [];
   private totalPackets: number = 0;
   private totalTraffic: number = 0;
   private colorPanelVisible: boolean = false;
+  private devicePropertiesPanel: HTMLElement | null = null;
 
   constructor() {
     this.wsService = new WebSocketService('');
 
-    const canvas = document.createElement('canvas');
-    canvas.id = 'canvas-container';
+    this.canvas = document.createElement('canvas');
+    this.canvas.id = 'canvas-container';
     const vizContainer = document.getElementById('visualization');
     if (vizContainer) {
-      vizContainer.appendChild(canvas);
+      vizContainer.appendChild(this.canvas);
     }
-    this.vizService = new VisualizationService(canvas);
+    this.vizService = new VisualizationService(this.canvas);
 
     const controlPanel = this.createControlPanel();
     const statsPanel = this.createStatsPanel();
     const deviceTooltip = this.createDeviceTooltip();
     const colorPanel = this.createColorManagerPanel();
+    this.devicePropertiesPanel = this.createDevicePropertiesPanel();
 
     document.body.appendChild(controlPanel);
     document.body.appendChild(statsPanel);
     document.body.appendChild(deviceTooltip);
     document.body.appendChild(colorPanel);
+    if (this.devicePropertiesPanel) {
+      document.body.appendChild(this.devicePropertiesPanel);
+    }
 
     this.setupWebSocketHandlers();
     this.setupEventListeners();
@@ -141,7 +147,9 @@ export class PacketViewApp {
   private createColorManagerPanel(): HTMLElement {
     const panel = document.createElement('div');
     panel.className = 'color-manager-panel';
-    panel.style.display = this.colorPanelVisible ? 'block' : 'none';
+    if (this.colorPanelVisible) {
+      panel.classList.add('visible');
+    }
 
     panel.innerHTML = `
       <div class="color-manager-header">
@@ -238,7 +246,8 @@ export class PacketViewApp {
     const closeBtn = panel.querySelector('#close-color-panel') as HTMLButtonElement;
     closeBtn?.addEventListener('click', () => {
       this.colorPanelVisible = false;
-      panel.style.display = 'none';
+      panel.classList.remove('visible');
+      this.updateDevicePropertiesPanelPosition();
     });
 
     panel.querySelectorAll('input[id$="-color"]').forEach(input => {
@@ -317,6 +326,143 @@ export class PacketViewApp {
     return defaults[protocol];
   }
 
+  private createDevicePropertiesPanel(): HTMLElement {
+    const panel = document.createElement('div');
+    panel.className = 'device-properties-panel';
+    panel.innerHTML = `
+      <div class="device-properties-header">
+        <h3>Selected Devices</h3>
+        <button id="close-device-properties" class="close-button">×</button>
+      </div>
+      <div class="device-properties-content">
+        <div class="device-properties-summary">
+          <div class="property-row">
+            <span class="property-label">Devices Selected:</span>
+            <span class="property-value" id="selected-count">0</span>
+          </div>
+          <div class="property-row">
+            <span class="property-label">Total Traffic:</span>
+            <span class="property-value" id="selected-total-traffic">0 B</span>
+          </div>
+          <div class="property-row">
+            <span class="property-label">Traffic In:</span>
+            <span class="property-value" id="selected-traffic-in">0 B</span>
+          </div>
+          <div class="property-row">
+            <span class="property-label">Traffic Out:</span>
+            <span class="property-value" id="selected-traffic-out">0 B</span>
+          </div>
+          <div class="property-row">
+            <span class="property-label">Local Devices:</span>
+            <span class="property-value" id="selected-local-count">0</span>
+          </div>
+          <div class="property-row">
+            <span class="property-label">Public Devices:</span>
+            <span class="property-value" id="selected-public-count">0</span>
+          </div>
+        </div>
+        <div class="device-types-section" id="device-types-section" style="display: none;">
+          <h4>Device Types</h4>
+          <div id="device-types-list"></div>
+        </div>
+        <div class="selected-devices-list" id="selected-devices-list"></div>
+      </div>
+    `;
+
+    const closeBtn = panel.querySelector('#close-device-properties') as HTMLButtonElement;
+    closeBtn?.addEventListener('click', () => {
+      panel.style.display = 'none';
+    });
+
+    return panel;
+  }
+
+  private updateDevicePropertiesPanel(): void {
+    if (!this.devicePropertiesPanel) return;
+
+    const stats = this.vizService.getSelectedDevicesStats();
+    const selectedDevices = this.vizService.getSelectedDevices();
+
+    if (stats.count === 0) {
+      this.devicePropertiesPanel.classList.remove('visible');
+      return;
+    }
+
+    this.devicePropertiesPanel.classList.add('visible');
+
+    const countEl = this.devicePropertiesPanel.querySelector('#selected-count');
+    const totalTrafficEl = this.devicePropertiesPanel.querySelector('#selected-total-traffic');
+    const trafficInEl = this.devicePropertiesPanel.querySelector('#selected-traffic-in');
+    const trafficOutEl = this.devicePropertiesPanel.querySelector('#selected-traffic-out');
+    const localCountEl = this.devicePropertiesPanel.querySelector('#selected-local-count');
+    const publicCountEl = this.devicePropertiesPanel.querySelector('#selected-public-count');
+
+    if (countEl) countEl.textContent = stats.count.toString();
+    if (totalTrafficEl) totalTrafficEl.textContent = this.formatBytes(stats.totalTraffic);
+    if (trafficInEl) trafficInEl.textContent = this.formatBytes(stats.totalTrafficIn);
+    if (trafficOutEl) trafficOutEl.textContent = this.formatBytes(stats.totalTrafficOut);
+    if (localCountEl) localCountEl.textContent = stats.localDevices.toString();
+    if (publicCountEl) publicCountEl.textContent = stats.publicDevices.toString();
+
+    const deviceTypesSection = this.devicePropertiesPanel.querySelector('#device-types-section') as HTMLElement;
+    const deviceTypesList = this.devicePropertiesPanel.querySelector('#device-types-list');
+
+    if (deviceTypesSection && deviceTypesList) {
+      const typeEntries = Object.entries(stats.deviceTypes);
+      if (typeEntries.length > 0) {
+        deviceTypesSection.style.display = 'block';
+        deviceTypesList.innerHTML = typeEntries
+          .map(([type, count]) => `
+            <div class="device-type-row">
+              <span class="device-type-name">${type}:</span>
+              <span class="device-type-count">${count}</span>
+            </div>
+          `)
+          .join('');
+      } else {
+        deviceTypesSection.style.display = 'none';
+      }
+    }
+
+    const devicesList = this.devicePropertiesPanel.querySelector('#selected-devices-list');
+    if (devicesList) {
+      if (selectedDevices.length <= 10) {
+        devicesList.innerHTML = selectedDevices
+          .map(device => `
+            <div class="selected-device-item">
+              <span class="device-ip">${device.ip}</span>
+              <span class="device-traffic">${this.formatBytes(device.trafficIn + device.trafficOut)}</span>
+            </div>
+          `)
+          .join('');
+      } else {
+        devicesList.innerHTML = `
+          <div class="selected-device-item">
+            <span class="device-ip">${selectedDevices.length} devices selected</span>
+          </div>
+          <div class="selected-device-item" style="font-size: 11px; color: #888;">
+            <span>Individual list hidden for performance</span>
+          </div>
+        `;
+      }
+    }
+
+    this.updateDevicePropertiesPanelPosition();
+  }
+
+  private updateDevicePropertiesPanelPosition(): void {
+    if (!this.devicePropertiesPanel) return;
+
+    const colorPanel = document.querySelector('.color-manager-panel') as HTMLElement;
+    const isColorPanelVisible = colorPanel && colorPanel.classList.contains('visible');
+
+    if (isColorPanelVisible) {
+      this.devicePropertiesPanel.classList.add('shifted');
+    } else {
+      this.devicePropertiesPanel.classList.remove('shifted');
+    }
+  }
+
   private updateColorManagerUI(): void {
     const panel = document.querySelector('.color-manager-panel') as HTMLElement;
     if (!panel) return;
@@ -384,11 +530,30 @@ export class PacketViewApp {
       const colorPanel = document.querySelector('.color-manager-panel') as HTMLElement;
       if (colorPanel) {
         this.colorPanelVisible = !this.colorPanelVisible;
-        colorPanel.style.display = this.colorPanelVisible ? 'block' : 'none';
+        if (this.colorPanelVisible) {
+          colorPanel.classList.add('visible');
+        } else {
+          colorPanel.classList.remove('visible');
+        }
+        this.updateDevicePropertiesPanelPosition();
       }
     });
 
     document.addEventListener('mousemove', () => this.handleMouseMove());
+
+    this.canvas.addEventListener('mouseup', () => {
+      setTimeout(() => this.updateDevicePropertiesPanel(), 0);
+    });
+
+    this.canvas.addEventListener('touchend', () => {
+      setTimeout(() => this.updateDevicePropertiesPanel(), 0);
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' || (e.key === 'a' && (e.ctrlKey || e.metaKey))) {
+        setTimeout(() => this.updateDevicePropertiesPanel(), 0);
+      }
+    });
 
     this.vizService.start();
   }
