@@ -26,6 +26,9 @@ PacketView is a full-stack application that captures network packets using `tcpd
 - **Multi-Device Selection**: Select and drag multiple devices simultaneously for easier network layout management
 - **Customizable Color Scheme**: Personalize protocol and device colors with an intuitive color manager
 - **Persistent Color Preferences**: Your color settings are saved locally and persist across browser sessions
+- **Device Properties Panel**: View detailed statistics for selected devices including total traffic, packets, and device type breakdown
+- **Smart Panel Layout**: Device info panel dynamically repositions when color manager is open
+- **Smooth Animations**: Fade and slide transitions for all UI panels
 
 ## Architecture
 
@@ -53,6 +56,7 @@ PacketView/
 - **Frontend**: Vite-powered SPA with HTML5 Canvas for 2D visualization
 - **VisualizationService**: Renders network topology and packet animations
 - **ColorManager**: Manages color preferences with localStorage persistence
+- **DevicePropertiesPanel**: Displays aggregated statistics for selected devices with dynamic positioning
 
 
 ## Prerequisites
@@ -173,12 +177,20 @@ The backend will serve the built frontend files and listen on port 3001.
    - **Click empty space**: Clear selection
    - **Escape**: Deselect all devices
    - **Ctrl+A / Cmd+A**: Select all visible devices
-6. **Touchscreen Support**:
+6. **Device Properties Panel**: Automatically appears when devices are selected
+   - Shows **number of selected devices**
+   - Displays **total traffic** (inbound, outbound, combined)
+   - Breakdown of **local vs public** devices
+   - **Device type distribution** (Gateway, Host, Router, etc.)
+   - List of **individual device IPs** with traffic stats
+   - Dynamically repositions when Color Manager is open
+   - Smooth fade in/out animations
+7. **Touchscreen Support**:
    - **Tap**: Select a single device
    - **Long-press (500ms) + Drag**: Draw rectangle to select multiple devices
    - **Drag**: Move selected devices
    - **Tap empty space**: Clear selection
-7. **Statistics Panel**: View real-time network statistics
+8. **Statistics Panel**: View real-time network statistics
 
 ## API Reference
 
