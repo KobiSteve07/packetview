@@ -1100,7 +1100,9 @@ export class VisualizationService {
 
     for (const device of this.devices.values()) {
       if (device.x >= x1 && device.x <= x2 && device.y >= y1 && device.y <= y2) {
-        this.selectedDevices.add(device.id);
+        if (this.passesDeviceFilter(device)) {
+          this.selectedDevices.add(device.id);
+        }
       }
     }
   }
