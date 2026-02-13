@@ -48,6 +48,11 @@ export class PacketViewApp {
     this.setupEventListeners();
     this.loadInterfaces();
     this.vizService.start();
+    this.applyUITheme();
+
+    colorManager.subscribe(() => {
+      this.applyUITheme();
+    });
   }
 
   private createControlPanel(): HTMLElement {
@@ -59,8 +64,12 @@ export class PacketViewApp {
         <label>Network Interfaces</label>
         <div id="interface-checkboxes" class="interface-checkboxes"></div>
       </div>
-      <div class="section filter-section">
-        <h3>Live Filters</h3>
+      <div class="section filter-section collapsed">
+        <h3 class="collapsible-header">
+          <span>Live Filters</span>
+          <span class="toggle-icon">▼</span>
+        </h3>
+        <div class="filter-content">
         <div class="filter-row">
           <label for="ip-filter">IP Address:</label>
           <input type="text" id="ip-filter" placeholder="e.g., 192.168" />
@@ -101,12 +110,13 @@ export class PacketViewApp {
           </label>
         </div>
         <div class="filter-row">
-          <label for="local-device-filter" class="checkbox-label">
-            <input type="checkbox" id="local-device-filter" checked />
-            Show Scanning Device
-          </label>
+           <label for="local-device-filter" class="checkbox-label">
+             <input type="checkbox" id="local-device-filter" checked />
+             Show Scanning Device
+           </label>
+         </div>
         </div>
-       </div>
+        </div>
        <div class="section">
          <div class="filter-row">
            <label for="auto-reverse-dns" class="checkbox-label">
@@ -164,84 +174,120 @@ export class PacketViewApp {
       panel.classList.add('visible');
     }
 
+    const uiTheme = colorManager.getUITheme();
     panel.innerHTML = `
       <div class="color-manager-header">
         <h3>Color Manager</h3>
         <button id="close-color-panel" class="close-button">×</button>
       </div>
       <div class="color-manager-content">
-        <div class="color-section">
-          <h4>Protocol Colors</h4>
-          <div class="color-row">
-            <label for="tcp-color">TCP</label>
-            <input type="color" id="tcp-color" value="${colorManager.getProtocolColor(Types.Protocol.TCP)}" />
-            <button class="reset-color-btn" data-protocol="TCP">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="udp-color">UDP</label>
-            <input type="color" id="udp-color" value="${colorManager.getProtocolColor(Types.Protocol.UDP)}" />
-            <button class="reset-color-btn" data-protocol="UDP">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="icmp-color">ICMP</label>
-            <input type="color" id="icmp-color" value="${colorManager.getProtocolColor(Types.Protocol.ICMP)}" />
-            <button class="reset-color-btn" data-protocol="ICMP">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="http-color">HTTP</label>
-            <input type="color" id="http-color" value="${colorManager.getProtocolColor(Types.Protocol.HTTP)}" />
-            <button class="reset-color-btn" data-protocol="HTTP">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="https-color">HTTPS</label>
-            <input type="color" id="https-color" value="${colorManager.getProtocolColor(Types.Protocol.HTTPS)}" />
-            <button class="reset-color-btn" data-protocol="HTTPS">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="dns-color">DNS</label>
-            <input type="color" id="dns-color" value="${colorManager.getProtocolColor(Types.Protocol.DNS)}" />
-            <button class="reset-color-btn" data-protocol="DNS">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="ssh-color">SSH</label>
-            <input type="color" id="ssh-color" value="${colorManager.getProtocolColor(Types.Protocol.SSH)}" />
-            <button class="reset-color-btn" data-protocol="SSH">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="ftp-color">FTP</label>
-            <input type="color" id="ftp-color" value="${colorManager.getProtocolColor(Types.Protocol.FTP)}" />
-            <button class="reset-color-btn" data-protocol="FTP">Reset</button>
-          </div>
-          <div class="color-row">
-            <label for="smtp-color">SMTP</label>
-            <input type="color" id="smtp-color" value="${colorManager.getProtocolColor(Types.Protocol.SMTP)}" />
-            <button class="reset-color-btn" data-protocol="SMTP">Reset</button>
+        <div class="color-section collapsed">
+          <h4 class="collapsible-section-header">
+            <span>UI Theme Override</span>
+            <span class="toggle-icon">▼</span>
+          </h4>
+          <div class="section-content">
+            <div class="theme-toggle-row">
+              <label class="checkbox-label">
+                <input type="radio" name="ui-theme" value="system" ${uiTheme.mode === 'system' ? 'checked' : ''} />
+                Use System Theme
+              </label>
+            </div>
+            <div class="theme-toggle-row">
+              <label class="checkbox-label">
+                <input type="radio" name="ui-theme" value="custom" ${uiTheme.mode === 'custom' ? 'checked' : ''} />
+                Use Custom Colors
+              </label>
+            </div>
+            <div class="color-row ui-theme-colors" style="${uiTheme.mode === 'system' ? 'opacity: 0.5; pointer-events: none;' : ''}">
+              <label for="ui-accent-color">Accent Color</label>
+              <input type="color" id="ui-accent-color" value="${uiTheme.accentColor}" />
+              <button class="reset-color-btn" data-ui-theme="accent">Reset</button>
+            </div>
           </div>
         </div>
-        <div class="color-section">
-          <h4>Device Colors</h4>
-          <div class="device-color-group">
-            <label>My Device</label>
-            <div class="gradient-color-row">
-              <input type="color" id="my-device-start" value="${colorManager.getMyDeviceColors().start}" />
-              <span>→</span>
-              <input type="color" id="my-device-end" value="${colorManager.getMyDeviceColors().end}" />
+        <div class="color-section collapsed">
+          <h4 class="collapsible-section-header">
+            <span>Protocol Colors</span>
+            <span class="toggle-icon">▼</span>
+          </h4>
+          <div class="section-content">
+            <div class="color-row">
+              <label for="tcp-color">TCP</label>
+              <input type="color" id="tcp-color" value="${colorManager.getProtocolColor(Types.Protocol.TCP)}" />
+              <button class="reset-color-btn" data-protocol="TCP">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="udp-color">UDP</label>
+              <input type="color" id="udp-color" value="${colorManager.getProtocolColor(Types.Protocol.UDP)}" />
+              <button class="reset-color-btn" data-protocol="UDP">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="icmp-color">ICMP</label>
+              <input type="color" id="icmp-color" value="${colorManager.getProtocolColor(Types.Protocol.ICMP)}" />
+              <button class="reset-color-btn" data-protocol="ICMP">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="http-color">HTTP</label>
+              <input type="color" id="http-color" value="${colorManager.getProtocolColor(Types.Protocol.HTTP)}" />
+              <button class="reset-color-btn" data-protocol="HTTP">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="https-color">HTTPS</label>
+              <input type="color" id="https-color" value="${colorManager.getProtocolColor(Types.Protocol.HTTPS)}" />
+              <button class="reset-color-btn" data-protocol="HTTPS">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="dns-color">DNS</label>
+              <input type="color" id="dns-color" value="${colorManager.getProtocolColor(Types.Protocol.DNS)}" />
+              <button class="reset-color-btn" data-protocol="DNS">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="ssh-color">SSH</label>
+              <input type="color" id="ssh-color" value="${colorManager.getProtocolColor(Types.Protocol.SSH)}" />
+              <button class="reset-color-btn" data-protocol="SSH">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="ftp-color">FTP</label>
+              <input type="color" id="ftp-color" value="${colorManager.getProtocolColor(Types.Protocol.FTP)}" />
+              <button class="reset-color-btn" data-protocol="FTP">Reset</button>
+            </div>
+            <div class="color-row">
+              <label for="smtp-color">SMTP</label>
+              <input type="color" id="smtp-color" value="${colorManager.getProtocolColor(Types.Protocol.SMTP)}" />
+              <button class="reset-color-btn" data-protocol="SMTP">Reset</button>
             </div>
           </div>
-          <div class="device-color-group">
-            <label>Local Device</label>
-            <div class="gradient-color-row">
-              <input type="color" id="local-device-start" value="${colorManager.getLocalDeviceColors().start}" />
-              <span>→</span>
-              <input type="color" id="local-device-end" value="${colorManager.getLocalDeviceColors().end}" />
+        </div>
+        <div class="color-section collapsed">
+          <h4 class="collapsible-section-header">
+            <span>Device Colors</span>
+            <span class="toggle-icon">▼</span>
+          </h4>
+          <div class="section-content">
+            <div class="device-color-group">
+              <label>My Device</label>
+              <div class="gradient-color-row">
+                <input type="color" id="my-device-start" value="${colorManager.getMyDeviceColors().start}" />
+                <span>→</span>
+                <input type="color" id="my-device-end" value="${colorManager.getMyDeviceColors().end}" />
+              </div>
             </div>
-          </div>
-          <div class="device-color-group">
-            <label>Public Device</label>
-            <div class="gradient-color-row">
-              <input type="color" id="public-device-start" value="${colorManager.getPublicDeviceColors().start}" />
-              <span>→</span>
-              <input type="color" id="public-device-end" value="${colorManager.getPublicDeviceColors().end}" />
+            <div class="device-color-group">
+              <label>Local Device</label>
+              <div class="gradient-color-row">
+                <input type="color" id="local-device-start" value="${colorManager.getLocalDeviceColors().start}" />
+                <span>→</span>
+                <input type="color" id="local-device-end" value="${colorManager.getLocalDeviceColors().end}" />
+              </div>
+            </div>
+            <div class="device-color-group">
+              <label>Public Device</label>
+              <div class="gradient-color-row">
+                <input type="color" id="public-device-start" value="${colorManager.getPublicDeviceColors().start}" />
+                <span>→</span>
+                <input type="color" id="public-device-end" value="${colorManager.getPublicDeviceColors().end}" />
+              </div>
             </div>
           </div>
         </div>
@@ -317,10 +363,74 @@ export class PacketViewApp {
 
     const resetAllBtn = panel.querySelector('#reset-all-colors') as HTMLButtonElement;
     resetAllBtn?.addEventListener('click', () => {
-      console.log('Reset all colors button clicked');
       colorManager.resetToDefaults();
       this.updateColorManagerUI();
     });
+
+    panel.querySelectorAll('.collapsible-section-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const section = header.closest('.color-section');
+        section?.classList.toggle('collapsed');
+      });
+    });
+
+    const uiThemeInputs = panel.querySelectorAll('input[name="ui-theme"]');
+    uiThemeInputs.forEach(input => {
+      input.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        const mode = target.value as 'system' | 'custom';
+        const currentTheme = colorManager.getUITheme();
+        colorManager.setUITheme(mode, currentTheme.accentColor);
+
+        const uiColorRow = panel.querySelector('.ui-theme-colors') as HTMLElement;
+        if (uiColorRow) {
+          if (mode === 'system') {
+            uiColorRow.style.opacity = '0.5';
+            uiColorRow.style.pointerEvents = 'none';
+          } else {
+            uiColorRow.style.opacity = '1';
+            uiColorRow.style.pointerEvents = 'auto';
+          }
+        }
+
+        this.applyUITheme();
+      });
+    });
+
+    const uiAccentColorInput = panel.querySelector('#ui-accent-color') as HTMLInputElement;
+    uiAccentColorInput?.addEventListener('input', (e) => {
+      const color = (e.target as HTMLInputElement).value;
+      colorManager.setUITheme('custom', color);
+      this.applyUITheme();
+    });
+
+    const uiThemeResetBtn = panel.querySelector('[data-ui-theme="accent"]') as HTMLButtonElement;
+    uiThemeResetBtn?.addEventListener('click', () => {
+      const defaultAccent = '#4a9eff';
+      colorManager.setUITheme('custom', defaultAccent);
+      const input = panel.querySelector('#ui-accent-color') as HTMLInputElement;
+      if (input) input.value = defaultAccent;
+      this.applyUITheme();
+    });
+
+    this.applyUITheme();
+  }
+
+  private applyUITheme(): void {
+    const theme = colorManager.getUITheme();
+    const root = document.documentElement;
+
+    if (theme.mode === 'custom') {
+      document.body.classList.add('custom-theme');
+      root.style.setProperty('--accent-color', theme.accentColor);
+      root.style.setProperty('--accent-color-text', '#ffffff');
+      root.style.setProperty('accent-color', theme.accentColor);
+    } else {
+      document.body.classList.remove('custom-theme');
+      root.style.removeProperty('--accent-color');
+      root.style.removeProperty('--accent-color-text');
+      root.style.setProperty('accent-color', 'auto');
+    }
   }
 
   private getDefaultProtocolColor(protocol: Types.Protocol): string | undefined {
@@ -520,6 +630,14 @@ export class PacketViewApp {
     const interfaceFilter = document.getElementById('interface-filter') as HTMLSelectElement;
     const localDeviceFilterCheckbox = document.getElementById('local-device-filter') as HTMLInputElement;
     const autoReverseDnsCheckbox = document.getElementById('auto-reverse-dns') as HTMLInputElement;
+
+    const filterSection = document.querySelector('.filter-section') as HTMLElement;
+    const collapsibleHeader = document.querySelector('.collapsible-header') as HTMLElement;
+    if (collapsibleHeader && filterSection) {
+      collapsibleHeader.addEventListener('click', () => {
+        filterSection.classList.toggle('collapsed');
+      });
+    }
 
     const updateFilters = () => {
       this.vizService.setFilters({

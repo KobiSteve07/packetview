@@ -11,6 +11,16 @@ body {
   color: #e0e0e0;
 }
 
+body:not(.custom-theme) {
+  --accent-color: AccentColor;
+  --accent-color-text: AccentColorText;
+}
+
+body.custom-theme {
+  --accent-color: #4a9eff;
+  --accent-color-text: #ffffff;
+}
+
 #app {
   width: 100vw;
   height: 100vh;
@@ -34,7 +44,7 @@ body {
 .control-panel h2 {
   margin-bottom: 15px;
   font-size: 18px;
-  color: #4a9eff;
+  color: var(--accent-color);
 }
 
 .control-panel .section {
@@ -55,6 +65,40 @@ body {
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid #444;
+}
+
+.control-panel .section.filter-section h3.collapsible-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.control-panel .section.filter-section h3.collapsible-header:hover {
+  color: var(--accent-color);
+}
+
+.control-panel .section.filter-section h3.collapsible-header .toggle-icon {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.control-panel .section.filter-section.collapsed h3.collapsible-header .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.control-panel .section.filter-section .filter-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+}
+
+.control-panel .section.filter-section.collapsed .filter-content {
+  max-height: 0;
+  opacity: 0;
 }
 
 .control-panel .filter-row {
@@ -98,8 +142,8 @@ body {
 .control-panel button {
   width: 100%;
   padding: 10px;
-  background-color: #4a9eff;
-  color: white;
+  background-color: var(--accent-color);
+  color: var(--accent-color-text);
   border: none;
   border-radius: 4px;
   font-size: 14px;
@@ -108,7 +152,7 @@ body {
 }
 
 .control-panel button:hover {
-  background-color: #3a8eef;
+  filter: brightness(0.85);
 }
 
 .control-panel button:disabled {
@@ -153,7 +197,7 @@ body {
 .device-tooltip {
   position: absolute;
   background-color: rgba(26, 26, 26, 0.95);
-  border: 1px solid #4a9eff;
+  border: 1px solid var(--accent-color);
   border-radius: 6px;
   padding: 12px;
   pointer-events: none;
@@ -164,7 +208,7 @@ body {
 
 .device-tooltip h3 {
   font-size: 14px;
-  color: #4a9eff;
+  color: var(--accent-color);
   margin-bottom: 8px;
 }
 
@@ -193,7 +237,7 @@ body {
 
 .stats-panel h3 {
   font-size: 14px;
-  color: #4a9eff;
+  color: var(--accent-color);
   margin-bottom: 10px;
 }
 
@@ -227,7 +271,7 @@ body {
 
 .protocol-legend h3 {
   font-size: 14px;
-  color: #4a9eff;
+  color: var(--accent-color);
   margin-bottom: 10px;
 }
 
@@ -293,7 +337,7 @@ body {
 }
 
 .interface-checkbox-item:hover {
-  background-color: rgba(74, 158, 255, 0.1);
+  background-color: rgba(100, 100, 100, 0.15);
 }
 
 .interface-checkbox-item label {
@@ -317,12 +361,13 @@ body {
   padding: 20px;
   min-width: 320px;
   max-height: 80vh;
-  overflow-y: auto;
   z-index: 1002;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease, visibility 0.3s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .color-manager-panel.visible {
@@ -337,11 +382,12 @@ body {
   margin-bottom: 15px;
   padding-bottom: 10px;
   border-bottom: 1px solid #444;
+  flex-shrink: 0;
 }
 
 .color-manager-header h3 {
   font-size: 16px;
-  color: #4a9eff;
+  color: var(--accent-color);
   margin: 0;
 }
 
@@ -362,8 +408,10 @@ body {
 }
 
 .color-manager-content {
-  max-height: calc(80vh - 100px);
+  flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
 }
 
 .color-section {
@@ -376,6 +424,56 @@ body {
   margin-bottom: 10px;
   padding-bottom: 6px;
   border-bottom: 1px solid #444;
+}
+
+.color-section h4.collapsible-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.color-section h4.collapsible-section-header:hover {
+  color: var(--accent-color);
+}
+
+.color-section h4.collapsible-section-header .toggle-icon {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.color-section.collapsed h4.collapsible-section-header .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.color-section .section-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.color-section.collapsed .section-content {
+  max-height: 0;
+  opacity: 0;
+}
+
+.theme-toggle-row {
+  margin-bottom: 10px;
+}
+
+.theme-toggle-row label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 13px;
+  color: #e0e0e0;
+}
+
+.theme-toggle-row input[type="radio"] {
+  margin-right: 8px;
 }
 
 .color-row {
@@ -455,7 +553,7 @@ body {
 }
 
 .gradient-color-row span {
-  color: #4a9eff;
+  color: var(--accent-color);
   font-weight: bold;
 }
 
@@ -463,6 +561,7 @@ body {
   margin-top: 15px;
   padding-top: 10px;
   border-top: 1px solid #444;
+  flex-shrink: 0;
 }
 
 .color-manager-footer .reset-all-btn {
@@ -519,7 +618,7 @@ body {
 
 .device-properties-header h3 {
   font-size: 16px;
-  color: #4a9eff;
+  color: var(--accent-color);
   margin: 0;
 }
 
@@ -628,7 +727,7 @@ body {
 }
 
 .selected-device-item .device-ip {
-  color: #4a9eff;
+  color: var(--accent-color);
   font-weight: bold;
 }
 
@@ -645,8 +744,8 @@ body {
 .reverse-dns-btn {
   width: 100%;
   padding: 10px;
-  background-color: #4a9eff;
-  color: white;
+  background-color: var(--accent-color);
+  color: var(--accent-color-text);
   border: none;
   border-radius: 4px;
   font-size: 13px;
@@ -655,7 +754,7 @@ body {
 }
 
 .reverse-dns-btn:hover {
-  background-color: #3a8eef;
+  filter: brightness(0.85);
 }
 
 .reverse-dns-btn:disabled {

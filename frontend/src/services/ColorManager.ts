@@ -16,9 +16,15 @@ export interface DeviceColors {
   };
 }
 
+export interface UITheme {
+  mode: 'system' | 'custom';
+  accentColor: string;
+}
+
 export interface ColorConfig {
   protocolColors: Record<Types.Protocol, string>;
   deviceColors: DeviceColors;
+  uiTheme: UITheme;
 }
 
 const DEFAULT_COLOR_CONFIG: ColorConfig = {
@@ -48,6 +54,10 @@ const DEFAULT_COLOR_CONFIG: ColorConfig = {
       start: '#ff9e4a',
       end: '#8a2a2a'
     }
+  },
+  uiTheme: {
+    mode: 'system',
+    accentColor: '#4a9eff'
   }
 };
 
@@ -131,6 +141,19 @@ export class ColorManager {
     this.notifyListeners();
   }
 
+  public getUITheme(): UITheme {
+    return { ...this.colorConfig.uiTheme };
+  }
+
+  public setUITheme(mode: 'system' | 'custom', accentColor?: string): void {
+    this.colorConfig.uiTheme.mode = mode;
+    if (accentColor) {
+      this.colorConfig.uiTheme.accentColor = accentColor;
+    }
+    this.saveToStorage();
+    this.notifyListeners();
+  }
+
   public getColorConfig(): ColorConfig {
     return { ...this.colorConfig };
   }
@@ -142,7 +165,8 @@ export class ColorManager {
         myDevice: { ...DEFAULT_COLOR_CONFIG.deviceColors.myDevice },
         localDevice: { ...DEFAULT_COLOR_CONFIG.deviceColors.localDevice },
         publicDevice: { ...DEFAULT_COLOR_CONFIG.deviceColors.publicDevice }
-      }
+      },
+      uiTheme: { ...DEFAULT_COLOR_CONFIG.uiTheme }
     };
     this.saveToStorage();
     this.notifyListeners();

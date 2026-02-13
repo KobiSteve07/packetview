@@ -17,6 +17,7 @@ PacketView is a full-stack application that captures network packets using `tcpd
  - **Real-time Packet Capture**: Capture packets from one or multiple network interfaces simultaneously
 - **2D Network Visualization**: Interactive visual representation of network topology with devices and connections
 - **Live Filtering**: Filter traffic by IP address, protocol (TCP, UDP, ICMP, HTTP, etc.), IP type (local/public), and interface
+- **Collapsible Filter Panel**: Collapse the Live Filters section to maximize visualization space
 - **Network Analysis**: Automatic device discovery and connection tracking
 - **Real-time Statistics**: View total packets, traffic volume, active devices, and active connections
 - **WebSocket Communication**: Low-latency real-time updates via WebSocket
@@ -25,6 +26,8 @@ PacketView is a full-stack application that captures network packets using `tcpd
 - **Responsive Design**: Clean and intuitive web interface
 - **Multi-Device Selection**: Select and drag multiple devices simultaneously for easier network layout management
 - **Customizable Color Scheme**: Personalize protocol and device colors with an intuitive color manager
+- **UI Theme Override**: Choose between system accent color (matches your OS theme) or custom accent colors
+- **Collapsible Color Manager**: Organized color settings with collapsible categories for Protocol Colors, Device Colors, and UI Theme
 - **Persistent Color Preferences**: Your color settings are saved locally and persist across browser sessions
 - **Device Properties Panel**: View detailed statistics for selected devices including total traffic, packets, and device type breakdown
 - **Smart Panel Layout**: Device info panel dynamically repositions when color manager is open
