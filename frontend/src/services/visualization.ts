@@ -25,6 +25,8 @@ export class VisualizationService {
     showLocalDevice: true
   };
 
+  private hostnameCache: Map<string, string | null> = new Map();
+
   // Pan state
   private panOffsetX: number = 0;
   private panOffsetY: number = 0;
@@ -864,20 +866,16 @@ export class VisualizationService {
     this.ctx.font = isBeingDragged ? 'bold 12px Arial' : 'bold 11px Arial';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(device.ip, device.x, device.y);
 
-    this.ctx.font = '10px Arial';
-    this.ctx.fillStyle = '#a0a0a0';
-    this.ctx.fillText(
-      `In: ${this.formatBytes(device.trafficIn)}`,
-      device.x,
-      device.y + 15
-    );
-    this.ctx.fillText(
-      `Out: ${this.formatBytes(device.trafficOut)}`,
-      device.x,
-      device.y + 27
-    );
+    const hostname = this.hostnameCache.get(device.ip);
+    if (hostname) {
+      this.ctx.fillText(device.ip, device.x, device.y - 8);
+      this.ctx.font = isBeingDragged ? 'bold 10px Arial' : 'bold 9px Arial';
+      this.ctx.fillStyle = '#4a9eff';
+      this.ctx.fillText(hostname, device.x, device.y + 8);
+    } else {
+      this.ctx.fillText(device.ip, device.x, device.y);
+    }
   }
 
   private formatBytes(bytes: number): string {
@@ -925,6 +923,10 @@ export class VisualizationService {
 
   setLocalIp(ip: string): void {
     this.localIp = ip;
+  }
+
+  setHostnameCache(cache: Map<string, string | null>): void {
+    this.hostnameCache = cache;
   }
 
   togglePacketAnimations(): boolean {
@@ -1021,6 +1023,16 @@ export class VisualizationService {
       }
     }
     return selected;
+  }
+
+  getVisibleDevices(): Types.NetworkDevice[] {
+    const visible: Types.NetworkDevice[] = [];
+    for (const device of this.devices.values()) {
+      if (this.passesDeviceFilter(device)) {
+        visible.push(device);
+      }
+    }
+    return visible;
   }
 
   getSelectedDevicesCount(): number {

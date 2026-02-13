@@ -29,6 +29,7 @@ PacketView is a full-stack application that captures network packets using `tcpd
 - **Device Properties Panel**: View detailed statistics for selected devices including total traffic, packets, and device type breakdown
 - **Smart Panel Layout**: Device info panel dynamically repositions when color manager is open
 - **Smooth Animations**: Fade and slide transitions for all UI panels
+- **Reverse DNS Lookup**: Resolve hostnames for visible devices with manual or automatic lookup
 
 ## Architecture
 
@@ -185,12 +186,16 @@ The backend will serve the built frontend files and listen on port 3001.
    - List of **individual device IPs** with traffic stats
    - Dynamically repositions when Color Manager is open
    - Smooth fade in/out animations
-7. **Touchscreen Support**:
+7. **Reverse DNS Lookup**:
+   - **Auto Lookup**: Enable "Auto Reverse DNS" checkbox to automatically resolve hostnames for all visible devices
+   - **Manual Lookup**: Select devices and click "Lookup Hostnames" in the Device Properties Panel
+   - **Display**: Hostnames appear below IP addresses on device nodes and in the device list
+8. **Touchscreen Support**:
    - **Tap**: Select a single device
    - **Long-press (500ms) + Drag**: Draw rectangle to select multiple devices
    - **Drag**: Move selected devices
    - **Tap empty space**: Clear selection
-8. **Statistics Panel**: View real-time network statistics
+9. **Statistics Panel**: View real-time network statistics
 
 ## API Reference
 
@@ -302,6 +307,37 @@ Update which interfaces are being monitored
 }
 ```
 
+#### GET /api/reverse-dns/:ip
+Perform reverse DNS lookup for a single IP address
+
+**Response:**
+```json
+{
+  "ip": "8.8.8.8",
+  "hostname": "dns.google"
+}
+```
+
+#### POST /api/reverse-dns/batch
+Perform reverse DNS lookup for multiple IP addresses (max 100)
+
+**Request Body:**
+```json
+{
+  "ips": ["8.8.8.8", "1.1.1.1"]
+}
+```
+
+**Response:**
+```json
+{
+  "results": [
+    { "ip": "8.8.8.8", "hostname": "dns.google" },
+    { "ip": "1.1.1.1", "hostname": "one.one.one.one" }
+  ]
+}
+```
+
 ### WebSocket Messages
 
 #### Connection
@@ -351,7 +387,8 @@ Connect to `ws://localhost:3001/ws`
       {
         "ip": "192.168.1.100",
         "mac": "00:11:22:33:44:55",
-        "name": "localhost",
+        "hostname": "my-laptop",
+        "type": "HOST",
         "isLocal": true
       }
     ],

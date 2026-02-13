@@ -1,4 +1,4 @@
-import { WebSocketService } from './services/api';
+import { WebSocketService, ApiService } from './services/api';
 import { VisualizationService } from './services/visualization';
 import { colorManager } from './services/ColorManager';
 import * as Types from './shared/types';
@@ -6,6 +6,7 @@ import './styles/global.css';
 
 export class PacketViewApp {
   private wsService: WebSocketService;
+  private apiService: ApiService;
   private vizService: VisualizationService;
   private canvas: HTMLCanvasElement;
   private interfaces: Types.InterfaceInfo[] = [];
@@ -13,9 +14,13 @@ export class PacketViewApp {
   private totalTraffic: number = 0;
   private colorPanelVisible: boolean = false;
   private devicePropertiesPanel: HTMLElement | null = null;
+  private autoReverseDns: boolean = false;
+  private reverseDnsCache: Map<string, string | null> = new Map();
+  private reverseDnsInProgress: Set<string> = new Set();
 
   constructor() {
     this.wsService = new WebSocketService('');
+    this.apiService = new ApiService();
 
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'canvas-container';
@@ -102,7 +107,15 @@ export class PacketViewApp {
           </label>
         </div>
        </div>
-       <button id="reset-view-btn">Reset View</button>
+       <div class="section">
+         <div class="filter-row">
+           <label for="auto-reverse-dns" class="checkbox-label">
+             <input type="checkbox" id="auto-reverse-dns" />
+             Auto Reverse DNS
+           </label>
+         </div>
+       </div>
+        <button id="reset-view-btn">Reset View</button>
        <button id="toggle-animations-btn">Disable Animations</button>
        <button id="color-manager-btn">Color Manager</button>
        <div class="status active" id="status-panel">
@@ -366,6 +379,9 @@ export class PacketViewApp {
           <div id="device-types-list"></div>
         </div>
         <div class="selected-devices-list" id="selected-devices-list"></div>
+        <div class="reverse-dns-section">
+          <button id="reverse-dns-btn" class="reverse-dns-btn">Lookup Hostnames</button>
+        </div>
       </div>
     `;
 
@@ -373,6 +389,9 @@ export class PacketViewApp {
     closeBtn?.addEventListener('click', () => {
       panel.style.display = 'none';
     });
+
+    const reverseDnsBtn = panel.querySelector('#reverse-dns-btn') as HTMLButtonElement;
+    reverseDnsBtn?.addEventListener('click', () => this.performReverseDnsForSelectedDevices());
 
     return panel;
   }
@@ -430,7 +449,7 @@ export class PacketViewApp {
         devicesList.innerHTML = selectedDevices
           .map(device => `
             <div class="selected-device-item">
-              <span class="device-ip">${device.ip}</span>
+              <span class="device-ip">${this.getHostnameDisplay(device.ip)}</span>
               <span class="device-traffic">${this.formatBytes(device.trafficIn + device.trafficOut)}</span>
             </div>
           `)
@@ -500,6 +519,7 @@ export class PacketViewApp {
     const broadcastFilterCheckbox = document.getElementById('broadcast-filter') as HTMLInputElement;
     const interfaceFilter = document.getElementById('interface-filter') as HTMLSelectElement;
     const localDeviceFilterCheckbox = document.getElementById('local-device-filter') as HTMLInputElement;
+    const autoReverseDnsCheckbox = document.getElementById('auto-reverse-dns') as HTMLInputElement;
 
     const updateFilters = () => {
       this.vizService.setFilters({
@@ -518,6 +538,12 @@ export class PacketViewApp {
     broadcastFilterCheckbox.addEventListener('change', updateFilters);
     interfaceFilter.addEventListener('change', updateFilters);
     localDeviceFilterCheckbox.addEventListener('change', updateFilters);
+    autoReverseDnsCheckbox?.addEventListener('change', () => {
+      this.autoReverseDns = autoReverseDnsCheckbox.checked;
+      if (this.autoReverseDns) {
+        this.performAutoReverseDns();
+      }
+    });
 
     resetViewBtn.addEventListener('click', () => this.vizService.resetView());
     document.getElementById('toggle-animations-btn')?.addEventListener('click', () => {
@@ -542,16 +568,31 @@ export class PacketViewApp {
     document.addEventListener('mousemove', () => this.handleMouseMove());
 
     this.canvas.addEventListener('mouseup', () => {
-      setTimeout(() => this.updateDevicePropertiesPanel(), 0);
+      setTimeout(() => {
+        this.updateDevicePropertiesPanel();
+        if (this.autoReverseDns) {
+          this.performAutoReverseDns();
+        }
+      }, 0);
     });
 
     this.canvas.addEventListener('touchend', () => {
-      setTimeout(() => this.updateDevicePropertiesPanel(), 0);
+      setTimeout(() => {
+        this.updateDevicePropertiesPanel();
+        if (this.autoReverseDns) {
+          this.performAutoReverseDns();
+        }
+      }, 0);
     });
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' || (e.key === 'a' && (e.ctrlKey || e.metaKey))) {
-        setTimeout(() => this.updateDevicePropertiesPanel(), 0);
+        setTimeout(() => {
+          this.updateDevicePropertiesPanel();
+          if (this.autoReverseDns) {
+            this.performAutoReverseDns();
+          }
+        }, 0);
       }
     });
 
@@ -689,6 +730,86 @@ export class PacketViewApp {
       .catch(error => {
         console.error('Failed to load interfaces:', error);
       });
+  }
+
+  private async performReverseDnsForSelectedDevices(): Promise<void> {
+    const selectedDevices = this.vizService.getSelectedDevices();
+    if (selectedDevices.length === 0) return;
+
+    const btn = document.getElementById('reverse-dns-btn') as HTMLButtonElement;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Looking up...';
+    }
+
+    const ipsToLookup = selectedDevices
+      .map(d => d.ip)
+      .filter(ip => !this.reverseDnsCache.has(ip) && !this.reverseDnsInProgress.has(ip));
+
+    if (ipsToLookup.length === 0) {
+      this.updateDevicePropertiesPanel();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Lookup Hostnames';
+      }
+      return;
+    }
+
+    ipsToLookup.forEach(ip => { this.reverseDnsInProgress.add(ip); });
+
+    try {
+      if (ipsToLookup.length === 1) {
+        const result = await this.apiService.reverseDnsLookup(ipsToLookup[0]);
+        this.reverseDnsCache.set(result.ip, result.hostname);
+      } else {
+        const response = await this.apiService.reverseDnsLookupBatch(ipsToLookup);
+        response.results.forEach(r => { this.reverseDnsCache.set(r.ip, r.hostname); });
+      }
+      this.vizService.setHostnameCache(this.reverseDnsCache);
+    } catch (error) {
+      console.error('Reverse DNS lookup failed:', error);
+    } finally {
+      ipsToLookup.forEach(ip => { this.reverseDnsInProgress.delete(ip); });
+      this.updateDevicePropertiesPanel();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Lookup Hostnames';
+      }
+    }
+  }
+
+  private performAutoReverseDns(): void {
+    if (!this.autoReverseDns) return;
+
+    const devices = this.vizService.getVisibleDevices();
+    const ipsToLookup = devices
+      .map(d => d.ip)
+      .filter(ip => !this.reverseDnsCache.has(ip) && !this.reverseDnsInProgress.has(ip));
+
+    if (ipsToLookup.length === 0) return;
+
+    ipsToLookup.forEach(ip => { this.reverseDnsInProgress.add(ip); });
+
+    this.apiService.reverseDnsLookupBatch(ipsToLookup)
+      .then(response => {
+        response.results.forEach(r => { this.reverseDnsCache.set(r.ip, r.hostname); });
+        this.vizService.setHostnameCache(this.reverseDnsCache);
+        this.updateDevicePropertiesPanel();
+      })
+      .catch(error => {
+        console.error('Auto reverse DNS lookup failed:', error);
+      })
+      .finally(() => {
+        ipsToLookup.forEach(ip => { this.reverseDnsInProgress.delete(ip); });
+      });
+  }
+
+  private getHostnameDisplay(ip: string): string {
+    const hostname = this.reverseDnsCache.get(ip);
+    if (hostname) {
+      return `${ip} (${hostname})`;
+    }
+    return ip;
   }
 }
 

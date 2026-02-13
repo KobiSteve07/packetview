@@ -121,4 +121,20 @@ export class ApiService {
     const response = await fetch(`${this.baseUrl}/capture/status`);
     return response.json();
   }
+
+  async reverseDnsLookup(ip: string): Promise<{ ip: string; hostname: string | null }> {
+    const response = await fetch(`${this.baseUrl}/reverse-dns/${ip}`);
+    return response.json();
+  }
+
+  async reverseDnsLookupBatch(ips: string[]): Promise<{ results: { ip: string; hostname: string | null }[] }> {
+    const response = await fetch(`${this.baseUrl}/reverse-dns/batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ips })
+    });
+    return response.json();
+  }
 }

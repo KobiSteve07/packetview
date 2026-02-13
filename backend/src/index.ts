@@ -10,6 +10,7 @@ import fs from 'fs';
 import cors from 'cors';
 import { logger } from './utils/logger';
 import { CONFIG } from './config/constants';
+import dns from 'dns';
 
 const app = express();
 const server = createServer(app);
@@ -201,6 +202,66 @@ app.post('/api/capture/interfaces', async (req, res) => {
   } catch (error: any) {
     console.error('[API] Error updating interfaces:', error);
     res.status(500).json({ error: error.message || 'Failed to update interfaces' });
+  }
+});
+
+app.get('/api/reverse-dns/:ip', async (req, res) => {
+  try {
+    const { ip } = req.params;
+
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info(`[API] GET /api/reverse-dns/${ip}`);
+    }
+
+    const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRegex.test(ip)) {
+      return res.status(400).json({ error: 'Invalid IP address format' });
+    }
+
+    const hostname = await dns.promises.reverse(ip).catch(() => null);
+
+    if (hostname && hostname.length > 0) {
+      res.json({ ip, hostname: hostname[0] });
+    } else {
+      res.json({ ip, hostname: null });
+    }
+  } catch (error: any) {
+    console.error('[API] Error performing reverse DNS lookup:', error);
+    res.status(500).json({ error: error.message || 'Failed to perform reverse DNS lookup' });
+  }
+});
+
+app.post('/api/reverse-dns/batch', async (req, res) => {
+  try {
+    const { ips } = req.body;
+
+    if (CONFIG.NODE_ENV === 'development') {
+      logger.info(`[API] POST /api/reverse-dns/batch: ips=${ips?.join(',')}`);
+    }
+
+    if (!Array.isArray(ips) || ips.length === 0) {
+      return res.status(400).json({ error: 'IPs array is required' });
+    }
+
+    if (ips.length > 100) {
+      return res.status(400).json({ error: 'Batch size limited to 100 IPs' });
+    }
+
+    const results = await Promise.all(
+      ips.map(async (ip: string) => {
+        try {
+          const hostnames = await dns.promises.reverse(ip);
+          return { ip, hostname: hostnames[0] || null };
+        } catch {
+          return { ip, hostname: null };
+        }
+      })
+    );
+
+    res.json({ results });
+  } catch (error: any) {
+    console.error('[API] Error performing batch reverse DNS lookup:', error);
+    res.status(500).json({ error: error.message || 'Failed to perform batch reverse DNS lookup' });
   }
 });
 

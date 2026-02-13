@@ -635,3 +635,34 @@ body {
 .selected-device-item .device-traffic {
   color: #a0a0a0;
 }
+
+.reverse-dns-section {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #444;
+}
+
+.reverse-dns-btn {
+  width: 100%;
+  padding: 10px;
+  background-color: #4a9eff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.reverse-dns-btn:hover {
+  background-color: #3a8eef;
+}
+
+.reverse-dns-btn:disabled {
+  background-color: #666;
+  cursor: not-allowed;
+}
+
+.device-ip {
+  word-break: break-all;
+}
